@@ -34,7 +34,7 @@
   }
   .ctrl-btn:active { background: rgba(255,255,255,0.3); }
   .ctrl-btn.jump { width: 72px; height: 72px; background: rgba(180,150,220,0.25); border-color: rgba(180,150,220,0.5); }
-  @media (max-width: 768px) { #mobile-controls { display: flex; } }
+  @media (max-width: 768px) { #mobile-controls { display: none; } }
 </style>
 </head>
 <body>
@@ -188,6 +188,64 @@ setupMobileButton('btn-left', 'ArrowLeft');
 setupMobileButton('btn-right', 'ArrowRight');
 setupMobileButton('btn-jump', 'Space');
 setupMobileButton('btn-attack', 'Attack');
+
+// Canvas touch/click for start screen and mode selection (mobile friendly)
+canvas.addEventListener('click', e => handleCanvasTap(e));
+canvas.addEventListener('touchend', e => {
+  e.preventDefault();
+  if (e.changedTouches.length === 1) handleCanvasTap(e.changedTouches[0]);
+});
+
+function getCanvasPos(e) {
+  const rect = canvas.getBoundingClientRect();
+  return {
+    x: (e.clientX - rect.left) * (GAME_W / rect.width),
+    y: (e.clientY - rect.top) * (GAME_H / rect.height),
+  };
+}
+
+function handleCanvasTap(e) {
+  const pos = getCanvasPos(e);
+
+  if (gameState === STATE.START) {
+    gameState = STATE.MODE_SELECT;
+    levelTransitionTimer = 0;
+    keys['Space'] = false; keys['ArrowUp'] = false; keys['KeyW'] = false;
+    jumpBufferTimer = 0;
+    return;
+  }
+
+  if (gameState === STATE.MODE_SELECT) {
+    // Check which mode card was tapped
+    const modes = [DIFFICULTY.EASY, DIFFICULTY.NORMAL, DIFFICULTY.HARD];
+    for (let i = 0; i < 3; i++) {
+      const mx = GAME_W/2 - 200 + i * 200;
+      const my = 250;
+      if (pos.x > mx-80 && pos.x < mx+80 && pos.y > my-70 && pos.y < my+130) {
+        if (i === 0) difficulty = 'EASY';
+        else if (i === 1) difficulty = 'NORMAL';
+        else difficulty = 'HARD';
+        startGame();
+        return;
+      }
+    }
+    return;
+  }
+
+  if (gameState === STATE.LEVEL_COMPLETE && levelTransitionTimer <= 0) {
+    nextLevel();
+    return;
+  }
+
+  if (gameState === STATE.WIN || gameState === STATE.GAMEOVER) {
+    if (levelTransitionTimer <= 30) {
+      gameState = STATE.MODE_SELECT;
+      keys['Space'] = false; keys['ArrowUp'] = false; keys['KeyW'] = false;
+      jumpBufferTimer = 0;
+    }
+    return;
+  }
+}
 
 // ==================== Game State ====================
 const STATE = { START: 0, MODE_SELECT: 1, PLAYING: 2, LEVEL_COMPLETE: 3, WIN: 4, GAMEOVER: 5 };
@@ -1057,7 +1115,7 @@ function drawStartScreen() {
 
   const pulse = Math.sin(t*2)*0.3+0.7;
   ctx.globalAlpha = pulse; ctx.fillStyle = 'rgba(255,255,255,0.8)'; ctx.font = '16px SimSun, Georgia, serif';
-  ctx.fillText('按 空格键 · 选择游戏模式', GAME_W/2, GAME_H/2+STORY.prologue.split('\n').length*24+35);
+  ctx.fillText('点击屏幕 · 选择游戏模式', GAME_W/2, GAME_H/2+STORY.prologue.split('\n').length*24+35);
   ctx.globalAlpha = 1;
 
   ctx.font = '12px SimSun, Georgia, serif'; ctx.fillStyle = 'rgba(255,255,255,0.35)';
@@ -1104,8 +1162,8 @@ function drawModeSelect() {
     // Key hint
     const pulse2 = Math.sin(Date.now()*0.005+i*2)*0.3+0.7;
     ctx.globalAlpha = pulse2;
-    ctx.fillStyle = 'rgba(255,255,255,0.8)'; ctx.font = 'bold 14px SimSun, Georgia, serif';
-    ctx.fillText(`按 ${keys[i]}`, mx, my+98);
+    ctx.fillStyle = 'rgba(255,255,255,0.7)'; ctx.font = 'bold 13px SimSun, Georgia, serif';
+    ctx.fillText(`点击选择 / 按 ${keys[i]}`, mx, my+98);
     ctx.globalAlpha = 1;
   }
 }
@@ -1125,7 +1183,7 @@ function drawLevelComplete() {
   if (levelTransitionTimer < 50) {
     ctx.globalAlpha = Math.sin(Date.now()*0.003*2)*0.3+0.7;
     ctx.fillStyle = 'rgba(255,255,255,0.7)'; ctx.font = '14px SimSun, Georgia, serif';
-    ctx.fillText('按 空格键 继续前行', GAME_W/2, GAME_H/2+lines.length*28+25);
+    ctx.fillText('点击屏幕 / 空格键 继续前行', GAME_W/2, GAME_H/2+lines.length*28+25);
     ctx.globalAlpha = 1;
   }
 }
@@ -1160,7 +1218,7 @@ function drawWinScreen() {
   if (levelTransitionTimer < 30) {
     ctx.globalAlpha = Math.sin(Date.now()*0.003*2)*0.3+0.7;
     ctx.fillStyle = 'rgba(255,255,255,0.8)'; ctx.font = '13px SimSun, Georgia, serif';
-    ctx.fillText('按 空格键 选择模式再玩一次', GAME_W/2, GAME_H-12);
+    ctx.fillText('点击屏幕 选择模式再玩一次', GAME_W/2, GAME_H-12);
     ctx.globalAlpha = 1;
   }
 
@@ -1180,7 +1238,7 @@ function drawGameOver() {
   if (levelTransitionTimer < 30) {
     ctx.globalAlpha = Math.sin(Date.now()*0.003*2)*0.3+0.7;
     ctx.fillStyle = 'rgba(255,255,255,0.7)'; ctx.font = '14px SimSun, Georgia, serif';
-    ctx.fillText('按 空格键 选择模式重新出发', GAME_W/2, GAME_H/2+60);
+    ctx.fillText('点击屏幕 选择模式重新出发', GAME_W/2, GAME_H/2+60);
     ctx.globalAlpha = 1;
   }
 }
@@ -1204,6 +1262,9 @@ function nextLevel() {
 function gameLoop() {
   update();
   render();
+  // 只在游戏中显示虚拟按键
+  const ctrls = document.getElementById('mobile-controls');
+  if (ctrls) ctrls.style.display = (gameState === STATE.PLAYING) ? 'flex' : 'none';
   requestAnimationFrame(gameLoop);
 }
 
