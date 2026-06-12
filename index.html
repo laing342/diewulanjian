@@ -7,17 +7,11 @@
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
   body {
-    background: #1a1a2e;
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    height: 100vh;
-    overflow: hidden;
+    background: #1a1a2e; display: flex; justify-content: center; align-items: center;
+    height: 100vh; overflow: hidden;
     font-family: 'Georgia', 'SimSun', 'STSong', serif;
     touch-action: manipulation;
-    -webkit-touch-callout: none;
-    -webkit-user-select: none;
-    user-select: none;
+    -webkit-touch-callout: none; -webkit-user-select: none; user-select: none;
   }
   #game-container { position: relative; display: flex; justify-content: center; align-items: center; }
   canvas { display: block; border-radius: 8px; box-shadow: 0 0 40px rgba(180, 160, 220, 0.35); }
@@ -51,39 +45,36 @@
   </div>
 </div>
 <script>
-// ==================== 🦋 故事配置 — 改这里 ====================
+// ==================== 🦋 故事配置 ====================
 const STORY = {
-  // 人物
   herName: '蝶蝶',
   yourName: '岚岚',
-  herNick: '小蝴蝶',
-  yourNick: '小雾',
-
-  // 标题
   title: '蝶舞岚间',
   subtitle: '山间有雾，雾中有蝶',
 
-  // 序章（开始画面下方的小字）
   prologue: '岚岚是山间的一缕雾，蝶蝶是雾中飞舞的一只蝴蝶。\n岚岚总在清晨出现，只为等蝶蝶穿过他的那一刻。\n\n有一天，一阵风把蝶蝶吹去了远方……\n岚岚决定离开这片山，去找她回来。',
 
-  // 三句关卡名
+  // 6关关卡名
   levelNames: [
     '第一幕 · 山间初遇',
-    '第二幕 · 雾散寻蝶',
-    '第三幕 · 岚归蝶舞',
+    '第二幕 · 雾起同行',
+    '第三幕 · 风急蝶惊',
+    '第四幕 · 穿山越岭',
+    '第五幕 · 星河暗涌',
+    '第六幕 · 岚归蝶舞',
   ],
 
-  // 每关通关后弹出的回忆独白
+  // 6关通关独白
   levelEpilogues: [
-    '那是一个春天的清晨，\n山雾正浓，一只小蝴蝶落在岚岚的手心。\n他第一次知道了心跳的声音。',
-    '蝶蝶被风吹散了方向，\n岚岚翻过三座山、穿过两条河，\n只要还能看见她的翅膀，他就不会停下。',
-    '他终于找到了她——\n蝴蝶停在最初的枝头，\n雾散去，阳光洒下来，他们再也不会分开。',
+    '那是一个春天的清晨，山雾正浓，\n一只小蝴蝶落在了岚岚的手心。\n他第一次知道了心跳的声音。',
+    '他们一起穿过薄雾，越过小溪。\n岚岚觉得，只要有蝶蝶在，\n这个世界就没有什么好怕的。',
+    '风忽然大了，蝶蝶被吹得摇摆不定。\n岚岚拼命伸出手——\n"抓住我！我不会松开的！"',
+    '这是一段漫长的路。\n怀疑、距离、时间——每一个都想阻挡他。\n但他知道，蝶蝶就在前方。',
+    '夜幕降临，满天星辰。\n岚岚已经走了很远很远，\n可他一点都不觉得累。',
+    '他终于找到了她——\n蝴蝶停在最初的枝头，翅膀轻轻扇动。\n雾散去，阳光洒下，他们再也不会分开。',
   ],
 
-  // 敌人名字（怀疑、距离、时间）
-  enemyNames: ['怀疑', '距离', '时间'],
-
-  // 情书内容
+  // 情书
   loveLetter: [
     '亲爱的蝶蝶：',
     '',
@@ -119,6 +110,13 @@ const STORY = {
   ].join('\n'),
 };
 
+// 三种难度模式
+const DIFFICULTY = {
+  EASY:   { name: '🌿 简单', lives: 7, enemySpeedMul: 0.65, enemyCountAdd: -1, coyote: 12, desc: '轻轻松松，慢慢走' },
+  NORMAL: { name: '🍂 普通', lives: 5, enemySpeedMul: 1.0,  enemyCountAdd: 0,  coyote: 8,  desc: '正常挑战，刚刚好' },
+  HARD:   { name: '🔥 困难', lives: 3, enemySpeedMul: 1.4,  enemyCountAdd: 1,  coyote: 4,  desc: '高难挑战，全力以赴' },
+};
+
 // ==================== Canvas Setup ====================
 const canvas = document.getElementById('game');
 const ctx = canvas.getContext('2d');
@@ -138,33 +136,42 @@ resize();
 const keys = {};
 window.addEventListener('keydown', e => {
   keys[e.code] = true;
-  if (e.code === 'Space' || e.code === 'ArrowUp') e.preventDefault();
+  if (e.code === 'Space' || e.code === 'ArrowUp') { e.preventDefault(); jumpBufferTimer = JUMP_BUFFER_FRAMES; }
+  if (e.code === 'Digit1' || e.code === 'KeyE') keys['Mode1'] = true;
+  if (e.code === 'Digit2' || e.code === 'KeyN') keys['Mode2'] = true;
+  if (e.code === 'Digit3' || e.code === 'KeyH') keys['Mode3'] = true;
 });
-window.addEventListener('keyup', e => { keys[e.code] = false; });
+window.addEventListener('keyup', e => {
+  keys[e.code] = false;
+  if (e.code === 'Space' || e.code === 'ArrowUp' || e.code === 'KeyW') jumpHeld = false;
+});
 
 function setupMobileButton(id, key) {
   const btn = document.getElementById(id);
   if (!btn) return;
-  btn.addEventListener('pointerdown', e => { e.preventDefault(); keys[key] = true; });
-  btn.addEventListener('pointerup', e => { e.preventDefault(); keys[key] = false; });
-  btn.addEventListener('pointerleave', e => { keys[key] = false; });
+  btn.addEventListener('pointerdown', e => { e.preventDefault(); keys[key] = true; if (key==='Space') { jumpBufferTimer=JUMP_BUFFER_FRAMES; } });
+  btn.addEventListener('pointerup', e => { e.preventDefault(); keys[key] = false; if (key==='Space') jumpHeld=false; });
+  btn.addEventListener('pointerleave', e => { keys[key] = false; if (key==='Space') jumpHeld=false; });
 }
 setupMobileButton('btn-left', 'ArrowLeft');
 setupMobileButton('btn-right', 'ArrowRight');
 setupMobileButton('btn-jump', 'Space');
 
 // ==================== Game State ====================
-const STATE = { START: 0, PLAYING: 1, LEVEL_COMPLETE: 2, WIN: 3, GAMEOVER: 4 };
+const STATE = { START: 0, MODE_SELECT: 1, PLAYING: 2, LEVEL_COMPLETE: 3, WIN: 4, GAMEOVER: 5 };
 let gameState = STATE.START;
 let currentLevel = 0;
 let score = 0;
 let lives = 5;
+let difficulty = 'NORMAL';
 let levelTransitionTimer = 0;
 let shakeTimer = 0;
 let shakeIntensity = 0;
+let totalLevels = 6;
 
-// Player — 岚岚：雾霭色的圆润精灵
+// Player
 let player = { x: 0, y: -100, w: 32, h: 38, vx: 0, vy: 0, onGround: false, facing: 1, animTimer: 0, invincible: 0, trailTimer: 0 };
+let coyoteTimer = 0, jumpBufferTimer = 0, jumpHeld = false, prevOnGround = false;
 
 // Camera
 let camera = { x: 0, y: 0 };
@@ -190,323 +197,201 @@ function drawHeart(cx, cy, size, color) {
 }
 
 function drawButterfly(cx, cy, size, wingAngle) {
-  ctx.save();
-  ctx.translate(cx, cy);
+  ctx.save(); ctx.translate(cx, cy);
   const wa = wingAngle || Math.sin(Date.now() * 0.008) * 0.4;
-
-  // Upper wings
   ctx.fillStyle = '#e8a0d0';
-  ctx.beginPath();
-  ctx.ellipse(-4, -2, size * 0.5, size * 0.3, -0.3 - wa, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.beginPath();
-  ctx.ellipse(4, -2, size * 0.5, size * 0.3, 0.3 + wa, 0, Math.PI * 2);
-  ctx.fill();
-
-  // Lower wings
+  ctx.beginPath(); ctx.ellipse(-4, -2, size*0.5, size*0.3, -0.3-wa, 0, Math.PI*2); ctx.fill();
+  ctx.beginPath(); ctx.ellipse(4, -2, size*0.5, size*0.3, 0.3+wa, 0, Math.PI*2); ctx.fill();
   ctx.fillStyle = '#f0c8e8';
-  ctx.beginPath();
-  ctx.ellipse(-3, 2, size * 0.35, size * 0.22, -0.5 - wa * 0.6, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.beginPath();
-  ctx.ellipse(3, 2, size * 0.35, size * 0.22, 0.5 + wa * 0.6, 0, Math.PI * 2);
-  ctx.fill();
-
-  // Wing spots
+  ctx.beginPath(); ctx.ellipse(-3, 2, size*0.35, size*0.22, -0.5-wa*0.6, 0, Math.PI*2); ctx.fill();
+  ctx.beginPath(); ctx.ellipse(3, 2, size*0.35, size*0.22, 0.5+wa*0.6, 0, Math.PI*2); ctx.fill();
   ctx.fillStyle = 'rgba(255,255,255,0.6)';
-  ctx.beginPath(); ctx.arc(-4, -3, size * 0.12, 0, Math.PI * 2); ctx.fill();
-  ctx.beginPath(); ctx.arc(4, -3, size * 0.12, 0, Math.PI * 2); ctx.fill();
-
-  // Body
-  ctx.fillStyle = '#b07090';
-  ctx.fillRect(-1, -size * 0.4, 2, size * 0.8);
-
-  // Antennae
-  ctx.strokeStyle = '#b07090';
-  ctx.lineWidth = 0.8;
+  ctx.beginPath(); ctx.arc(-4, -3, size*0.12, 0, Math.PI*2); ctx.fill();
+  ctx.beginPath(); ctx.arc(4, -3, size*0.12, 0, Math.PI*2); ctx.fill();
+  ctx.fillStyle = '#b07090'; ctx.fillRect(-1, -size*0.4, 2, size*0.8);
+  ctx.strokeStyle = '#b07090'; ctx.lineWidth = 0.8;
   ctx.beginPath();
-  ctx.moveTo(0, -size * 0.35);
-  ctx.quadraticCurveTo(-3, -size * 0.6, -4, -size * 0.7);
-  ctx.moveTo(0, -size * 0.35);
-  ctx.quadraticCurveTo(3, -size * 0.6, 4, -size * 0.7);
-  ctx.stroke();
-
+  ctx.moveTo(0, -size*0.35); ctx.quadraticCurveTo(-3, -size*0.6, -4, -size*0.7);
+  ctx.moveTo(0, -size*0.35); ctx.quadraticCurveTo(3, -size*0.6, 4, -size*0.7); ctx.stroke();
   ctx.restore();
 }
 
 function drawPlayer() {
   if (player.invincible > 0 && Math.floor(player.invincible * 10) % 2 === 0) return;
   const { x, y, w, h } = player;
-  const cx = x + w / 2, cy = y + h / 2;
-
-  ctx.save();
-  ctx.translate(cx, cy);
+  const cx = x + w/2, cy = y + h/2;
+  ctx.save(); ctx.translate(cx, cy);
   if (player.facing === -1) ctx.scale(-1, 1);
-
   const bob = player.onGround ? Math.sin(player.animTimer * 0.3) * 2 : 0;
 
-  // Mist trail (岚岚是雾)
+  // Mist trail
   if (player.onGround || Math.abs(player.vx) > 0.5) {
     ctx.fillStyle = 'rgba(200,190,220,0.25)';
-    ctx.beginPath();
-    ctx.arc(-4, h / 2 - 2, 10 + Math.sin(Date.now() * 0.01) * 3, 0, Math.PI * 2);
-    ctx.fill();
+    ctx.beginPath(); ctx.arc(-4, h/2-2, 10+Math.sin(Date.now()*0.01)*3, 0, Math.PI*2); ctx.fill();
     ctx.fillStyle = 'rgba(210,200,230,0.18)';
-    ctx.beginPath();
-    ctx.arc(-8, h / 2 + 2, 6, 0, Math.PI * 2);
-    ctx.fill();
+    ctx.beginPath(); ctx.arc(-8, h/2+2, 6, 0, Math.PI*2); ctx.fill();
   }
 
   // Feet
   ctx.fillStyle = '#c8bfd8';
   const footOff = player.onGround ? Math.sin(player.animTimer * 0.3) * 4 : 2;
-  ctx.fillRect(-10, h / 2 - 6 + bob, 8, 7);
-  ctx.fillRect(2, h / 2 - 6 - footOff + bob, 8, 7);
+  ctx.fillRect(-10, h/2-6+bob, 8, 7); ctx.fillRect(2, h/2-6-footOff+bob, 8, 7);
 
-  // Body — soft mist gradient
+  // Body
   const bodyGrad = ctx.createRadialGradient(0, -2, 4, 0, 0, 16);
-  bodyGrad.addColorStop(0, '#d8d0f0');
-  bodyGrad.addColorStop(0.6, '#b8a8d8');
-  bodyGrad.addColorStop(1, '#9888b8');
+  bodyGrad.addColorStop(0, '#d8d0f0'); bodyGrad.addColorStop(0.6, '#b8a8d8'); bodyGrad.addColorStop(1, '#9888b8');
   ctx.fillStyle = bodyGrad;
-  ctx.beginPath();
-  ctx.arc(0, -2 + bob, 15, 0, Math.PI * 2);
-  ctx.fill();
-
-  // Soft edge glow
+  ctx.beginPath(); ctx.arc(0, -2+bob, 15, 0, Math.PI*2); ctx.fill();
   ctx.fillStyle = 'rgba(220,210,240,0.3)';
-  ctx.beginPath();
-  ctx.arc(0, -2 + bob, 13, 0, Math.PI * 2);
-  ctx.fill();
+  ctx.beginPath(); ctx.arc(0, -2+bob, 13, 0, Math.PI*2); ctx.fill();
 
-  // Eyes — big and gentle
+  // Eyes
   ctx.fillStyle = '#fff';
-  ctx.beginPath();
-  ctx.arc(-5, -6 + bob, 6.5, 0, Math.PI * 2);
-  ctx.arc(5, -6 + bob, 6.5, 0, Math.PI * 2);
-  ctx.fill();
+  ctx.beginPath(); ctx.arc(-5, -6+bob, 6.5, 0, Math.PI*2); ctx.arc(5, -6+bob, 6.5, 0, Math.PI*2); ctx.fill();
   ctx.fillStyle = '#3a3060';
-  ctx.beginPath();
-  ctx.arc(-4, -5 + bob, 2.8, 0, Math.PI * 2);
-  ctx.arc(6, -5 + bob, 2.8, 0, Math.PI * 2);
-  ctx.fill();
-  // Eye highlight
+  ctx.beginPath(); ctx.arc(-4, -5+bob, 2.8, 0, Math.PI*2); ctx.arc(6, -5+bob, 2.8, 0, Math.PI*2); ctx.fill();
   ctx.fillStyle = '#fff';
-  ctx.beginPath();
-  ctx.arc(-5, -6.5 + bob, 1.2, 0, Math.PI * 2);
-  ctx.arc(5, -6.5 + bob, 1.2, 0, Math.PI * 2);
-  ctx.fill();
+  ctx.beginPath(); ctx.arc(-5, -6.5+bob, 1.2, 0, Math.PI*2); ctx.arc(5, -6.5+bob, 1.2, 0, Math.PI*2); ctx.fill();
 
   // Blush
   ctx.fillStyle = 'rgba(200,160,180,0.45)';
-  ctx.beginPath();
-  ctx.arc(-9, -1 + bob, 3.5, 0, Math.PI * 2);
-  ctx.arc(9, -1 + bob, 3.5, 0, Math.PI * 2);
-  ctx.fill();
+  ctx.beginPath(); ctx.arc(-9, -1+bob, 3.5, 0, Math.PI*2); ctx.arc(9, -1+bob, 3.5, 0, Math.PI*2); ctx.fill();
 
-  // Tiny mist particles around
   if (player.trailTimer % 6 === 0) {
-    particles.push({
-      x: x + w / 2 + (Math.random() - 0.5) * 20,
-      y: y + h,
-      vx: (Math.random() - 0.5) * 1.5,
-      vy: -1 - Math.random() * 2,
-      life: 1,
-      decay: 0.03,
-      color: 'rgba(200,190,220,',
-      size: 3 + Math.random() * 3,
-    });
+    particles.push({ x: x+w/2+(Math.random()-0.5)*20, y: y+h, vx: (Math.random()-0.5)*1.5, vy: -1-Math.random()*2, life: 1, decay: 0.03, color: 'rgba(200,190,220,', size: 3+Math.random()*3 });
   }
   player.trailTimer++;
-
   ctx.restore();
 }
 
 function drawEnemy(e) {
-  ctx.save();
-  ctx.translate(e.x + e.w / 2, e.y + e.h / 2);
+  ctx.save(); ctx.translate(e.x+e.w/2, e.y+e.h/2);
 
-  // Shadow
   ctx.fillStyle = 'rgba(0,0,0,0.15)';
-  ctx.beginPath();
-  ctx.ellipse(0, e.h / 2 - 2, e.w * 0.38, 3, 0, 0, Math.PI * 2);
-  ctx.fill();
+  ctx.beginPath(); ctx.ellipse(0, e.h/2-2, e.w*0.38, 3, 0, 0, Math.PI*2); ctx.fill();
 
-  // Dark mist body — 怀疑/距离/时间的化身
-  const grad = ctx.createRadialGradient(0, -2, 2, 0, 0, e.w / 2);
-  grad.addColorStop(0, '#5a4a6a');
-  grad.addColorStop(1, '#2a1a3a');
+  // Color by type
+  const colors = {
+    '怀疑': ['#5a4a6a','#2a1a3a'],
+    '距离': ['#4a5a6a','#1a2a3a'],
+    '时间': ['#6a5a4a','#3a2a1a'],
+    '孤独': ['#5a2a3a','#3a0a1a'],
+    '恐惧': ['#3a5a3a','#1a3a1a'],
+  };
+  const [c1, c2] = colors[e.label] || colors['怀疑'];
+  const grad = ctx.createRadialGradient(0, -2, 2, 0, 0, e.w/2);
+  grad.addColorStop(0, c1); grad.addColorStop(1, c2);
   ctx.fillStyle = grad;
-  ctx.beginPath();
-  ctx.arc(0, 0, e.w / 2 - 2, 0, Math.PI * 2);
-  ctx.fill();
+  ctx.beginPath(); ctx.arc(0, 0, e.w/2-2, 0, Math.PI*2); ctx.fill();
 
   // Jagged aura
-  ctx.fillStyle = 'rgba(40,20,60,0.5)';
-  for (let i = 0; i < 6; i++) {
-    const a = (i / 6) * Math.PI * 2;
-    const sx = Math.cos(a) * (e.w / 2 - 1);
-    const sy = Math.sin(a) * (e.h / 2 - 1);
-    ctx.beginPath();
-    ctx.arc(sx, sy - 1, 5, 0, Math.PI * 2);
-    ctx.fill();
+  ctx.fillStyle = 'rgba(30,15,50,0.5)';
+  for (let i = 0; i < (e.isFast ? 7 : 6); i++) {
+    const a = (i / (e.isFast ? 7 : 6)) * Math.PI * 2;
+    ctx.beginPath(); ctx.arc(Math.cos(a)*(e.w/2-1), Math.sin(a)*(e.h/2-1)-1, e.isFast ? 3 : 5, 0, Math.PI*2); ctx.fill();
   }
 
-  // Eyes — sad/confused (not angry, these are doubts)
+  // Eyes
   ctx.fillStyle = '#fff';
-  ctx.beginPath();
-  ctx.arc(-5, -3, 5.5, 0, Math.PI * 2);
-  ctx.arc(5, -3, 5.5, 0, Math.PI * 2);
-  ctx.fill();
+  ctx.beginPath(); ctx.arc(-5, -3, 5.5, 0, Math.PI*2); ctx.arc(5, -3, 5.5, 0, Math.PI*2); ctx.fill();
   ctx.fillStyle = '#1a0a2a';
-  ctx.beginPath();
-  ctx.arc(-4, -2, 2.5, 0, Math.PI * 2);
-  ctx.arc(6, -2, 2.5, 0, Math.PI * 2);
-  ctx.fill();
+  ctx.beginPath(); ctx.arc(-4, -2, 2.5, 0, Math.PI*2); ctx.arc(6, -2, 2.5, 0, Math.PI*2); ctx.fill();
 
-  // Worried brows
-  ctx.strokeStyle = '#1a0a2a';
-  ctx.lineWidth = 1.8;
+  // Brows
+  ctx.strokeStyle = '#1a0a2a'; ctx.lineWidth = 1.8;
   ctx.beginPath();
   ctx.moveTo(-9, -8); ctx.lineTo(-3, -6);
-  ctx.moveTo(3, -6); ctx.lineTo(9, -8);
-  ctx.stroke();
+  ctx.moveTo(3, -6); ctx.lineTo(9, -8); ctx.stroke();
 
-  // Label — which enemy type
-  ctx.fillStyle = 'rgba(255,255,255,0.5)';
-  ctx.font = '10px SimSun, serif';
-  ctx.textAlign = 'center';
-  ctx.fillText(e.label || '', 0, -e.h / 2 - 6);
+  // If fast, add speed lines
+  if (e.isFast) {
+    ctx.strokeStyle = 'rgba(200,100,80,0.4)'; ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(e.w/2, -4); ctx.lineTo(e.w/2+6, -6);
+    ctx.moveTo(e.w/2, 2); ctx.lineTo(e.w/2+6, 4);
+    ctx.moveTo(-e.w/2, -4); ctx.lineTo(-e.w/2-6, -6);
+    ctx.moveTo(-e.w/2, 2); ctx.lineTo(-e.w/2-6, 4);
+    ctx.stroke();
+  }
 
+  ctx.fillStyle = 'rgba(255,255,255,0.5)'; ctx.font = '10px SimSun, serif'; ctx.textAlign = 'center';
+  ctx.fillText(e.label || '', 0, -e.h/2-6);
   ctx.restore();
 }
 
 function drawPlatform(p) {
-  // Stone path (山路)
-  const grad = ctx.createLinearGradient(p.x, p.y, p.x, p.y + p.h);
-  grad.addColorStop(0, '#a898b8');
-  grad.addColorStop(0.3, '#9888a8');
-  grad.addColorStop(1, '#786880');
-  ctx.fillStyle = grad;
-  ctx.fillRect(p.x, p.y, p.w, p.h);
-
-  // Moss top
+  const grad = ctx.createLinearGradient(p.x, p.y, p.x, p.y+p.h);
+  grad.addColorStop(0, '#a898b8'); grad.addColorStop(0.3, '#9888a8'); grad.addColorStop(1, '#786880');
+  ctx.fillStyle = grad; ctx.fillRect(p.x, p.y, p.w, p.h);
   const mossH = 7;
-  ctx.fillStyle = '#9ab89a';
-  ctx.fillRect(p.x, p.y, p.w, mossH);
+  ctx.fillStyle = '#9ab89a'; ctx.fillRect(p.x, p.y, p.w, mossH);
   ctx.fillStyle = '#a8c8a8';
-  for (let gx = p.x; gx < p.x + p.w; gx += 8) {
-    ctx.fillRect(gx, p.y, 4, mossH + 1);
-  }
-
-  // Texture
+  for (let gx = p.x; gx < p.x+p.w; gx += 8) ctx.fillRect(gx, p.y, 4, mossH+1);
   ctx.fillStyle = 'rgba(0,0,0,0.06)';
-  for (let dx = p.x + 3; dx < p.x + p.w; dx += 14) {
-    for (let dy = p.y + mossH + 3; dy < p.y + p.h; dy += 10) {
-      ctx.fillRect(dx, dy, 2, 2);
-    }
-  }
-
-  ctx.strokeStyle = 'rgba(0,0,0,0.15)';
-  ctx.lineWidth = 1;
-  ctx.strokeRect(p.x, p.y, p.w, p.h);
+  for (let dx = p.x+3; dx < p.x+p.w; dx += 14)
+    for (let dy = p.y+mossH+3; dy < p.y+p.h; dy += 10) ctx.fillRect(dx, dy, 2, 2);
+  ctx.strokeStyle = 'rgba(0,0,0,0.15)'; ctx.lineWidth = 1; ctx.strokeRect(p.x, p.y, p.w, p.h);
 }
 
 function drawGoal() {
-  const gx = goal.x + goal.w / 2;
-
-  // Glow aura
-  const glowGrad = ctx.createRadialGradient(gx, goal.y + 10, 6, gx, goal.y + 10, 40);
-  glowGrad.addColorStop(0, 'rgba(255,220,180,0.5)');
-  glowGrad.addColorStop(1, 'rgba(255,220,180,0)');
+  const gx = goal.x+goal.w/2;
+  const glowGrad = ctx.createRadialGradient(gx, goal.y+10, 6, gx, goal.y+10, 40);
+  glowGrad.addColorStop(0, 'rgba(255,220,180,0.5)'); glowGrad.addColorStop(1, 'rgba(255,220,180,0)');
   ctx.fillStyle = glowGrad;
-  ctx.beginPath();
-  ctx.arc(gx, goal.y + 10, 40, 0, Math.PI * 2);
-  ctx.fill();
-
-  // Pole — wooden
-  ctx.fillStyle = '#c8b898';
-  ctx.fillRect(gx - 2, goal.y, 4, goal.h);
-  ctx.fillStyle = '#d8c8a8';
-  ctx.fillRect(gx - 0.5, goal.y, 1, goal.h);
-
-  // Banner
-  const wave = Math.sin(Date.now() * 0.005) * 3;
+  ctx.beginPath(); ctx.arc(gx, goal.y+10, 40, 0, Math.PI*2); ctx.fill();
+  ctx.fillStyle = '#c8b898'; ctx.fillRect(gx-2, goal.y, 4, goal.h);
+  ctx.fillStyle = '#d8c8a8'; ctx.fillRect(gx-0.5, goal.y, 1, goal.h);
+  const wave = Math.sin(Date.now()*0.005)*3;
   ctx.fillStyle = '#d4a0c0';
   ctx.beginPath();
-  ctx.moveTo(gx + 2, goal.y + 4);
-  ctx.lineTo(gx + 38 + wave, goal.y + 18);
-  ctx.lineTo(gx + 2, goal.y + 32);
-  ctx.closePath();
+  ctx.moveTo(gx+2, goal.y+4); ctx.lineTo(gx+38+wave, goal.y+18); ctx.lineTo(gx+2, goal.y+32); ctx.closePath();
   ctx.fill();
-
-  // Butterfly on banner (蝶蝶的标志)
-  drawButterfly(gx + 14 + wave * 0.5, goal.y + 18, 16, Math.sin(Date.now() * 0.012) * 0.5);
+  drawButterfly(gx+14+wave*0.5, goal.y+18, 16, Math.sin(Date.now()*0.012)*0.5);
 }
 
 function drawBackground() {
   const palettes = [
-    ['#f5f0ff', '#e8ddf0', '#d8c8e8'], // 粉色晨曦 - 初遇
-    ['#fff5ee', '#f0e0d0', '#e0c8a8'], // 暖橘午后 - 寻找
-    ['#e8e0f0', '#c8b8e0', '#685890'], // 紫夜星空 - 团聚
+    ['#f5f0ff','#e8ddf0','#d8c8e8'], ['#fff5ee','#f0e0d0','#e0c8a8'],
+    ['#f0f0ff','#d0d8f0','#a0a8c8'], ['#fff0f0','#f0d8d0','#d8b8a8'],
+    ['#e8e0f0','#c0b8d0','#584878'], ['#e8e0f0','#c8b8e0','#685890'],
   ];
-  const [c1, c2, c3] = palettes[currentLevel] || palettes[0];
+  const [c1, c2, c3] = palettes[Math.min(currentLevel, 5)] || palettes[0];
   const grad = ctx.createLinearGradient(0, 0, 0, GAME_H);
-  grad.addColorStop(0, c1);
-  grad.addColorStop(0.55, c2);
-  grad.addColorStop(1, c3);
-  ctx.fillStyle = grad;
-  ctx.fillRect(0, 0, GAME_W, GAME_H);
+  grad.addColorStop(0, c1); grad.addColorStop(0.55, c2); grad.addColorStop(1, c3);
+  ctx.fillStyle = grad; ctx.fillRect(0, 0, GAME_W, GAME_H);
 
-  // Parallax mist layers (岚岚的世界)
+  // Mist layers
   for (let layer = 0; layer < 3; layer++) {
-    const alpha = 0.15 + layer * 0.08;
-    const speed = 0.05 + layer * 0.08;
-    ctx.fillStyle = `rgba(220,210,235,${alpha})`;
+    ctx.fillStyle = `rgba(220,210,235,${0.15+layer*0.08})`;
     for (let i = 0; i < 6; i++) {
-      const mx = (i * 220 + 30 * layer) - (camera.x * speed) % (GAME_W + 260);
-      const my = 40 + layer * 60;
-      ctx.beginPath();
-      ctx.ellipse(mx, my, 60 + layer * 25, 18 + layer * 8, 0, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.beginPath();
-      ctx.ellipse(mx - 25, my + 10, 40, 14, 0, 0, Math.PI * 2);
-      ctx.fill();
+      const mx = (i*220+30*layer)-(camera.x*(0.05+layer*0.08))%(GAME_W+260);
+      ctx.beginPath(); ctx.ellipse(mx, 40+layer*60, 60+layer*25, 18+layer*8, 0, 0, Math.PI*2); ctx.fill();
+      ctx.beginPath(); ctx.ellipse(mx-25, 50+layer*60, 40, 14, 0, 0, Math.PI*2); ctx.fill();
     }
   }
 
-  // Stars level 3
-  if (currentLevel === 2) {
+  // Stars (levels 5+)
+  if (currentLevel >= 4) {
     for (let i = 0; i < 50; i++) {
-      const sx = (i * 97 + 30) % GAME_W;
-      const sy = (i * 67 + 15) % (GAME_H * 0.55);
-      const twinkle = Math.sin(Date.now() * 0.002 + i) * 0.5 + 0.5;
-      ctx.fillStyle = `rgba(255,255,240,${0.25 + twinkle * 0.65})`;
-      ctx.beginPath();
-      ctx.arc(sx, sy, 0.8 + twinkle * 1.2, 0, Math.PI * 2);
-      ctx.fill();
+      const twinkle = Math.sin(Date.now()*0.002+i)*0.5+0.5;
+      ctx.fillStyle = `rgba(255,255,240,${0.25+twinkle*0.65})`;
+      ctx.beginPath(); ctx.arc((i*97+30)%GAME_W, (i*67+15)%(GAME_H*0.55), 0.8+twinkle*1.2, 0, Math.PI*2); ctx.fill();
     }
   }
 
-  // Distant mountains
-  ctx.fillStyle = currentLevel === 2 ? 'rgba(50,40,70,0.55)' : 'rgba(180,170,190,0.4)';
-  ctx.beginPath();
-  ctx.moveTo(0, GAME_H);
+  // Mountains
+  ctx.fillStyle = currentLevel >= 4 ? 'rgba(50,40,70,0.55)' : 'rgba(180,170,190,0.4)';
+  ctx.beginPath(); ctx.moveTo(0, GAME_H);
   for (let x = 0; x <= GAME_W; x += 2) {
-    const hx = x + camera.x * 0.08;
-    const hy = GAME_H - 90 - Math.sin(hx * 0.004) * 45 - Math.sin(hx * 0.011) * 25 - Math.sin(hx * 0.023) * 15;
-    ctx.lineTo(x, hy);
+    ctx.lineTo(x, GAME_H-90-Math.sin((x+camera.x*0.08)*0.004)*45-Math.sin((x+camera.x*0.08)*0.011)*25-Math.sin((x+camera.x*0.08)*0.023)*15);
   }
-  ctx.lineTo(GAME_W, GAME_H);
-  ctx.fill();
+  ctx.lineTo(GAME_W, GAME_H); ctx.fill();
 
-  // Occasional distant butterflies
+  // Distant butterflies
   if (currentLevel >= 1) {
     for (let i = 0; i < 3; i++) {
-      const bx = (i * 400 + 150 + Date.now() * 0.015 * (i + 1)) % (GAME_W + 100) - 50;
-      const by = 60 + i * 45 + Math.sin(Date.now() * 0.003 + i) * 15;
       ctx.globalAlpha = 0.25;
-      drawButterfly(bx, by, 10, Math.sin(Date.now() * 0.01 + i) * 0.6);
+      drawButterfly((i*400+150+Date.now()*0.015*(i+1))%(GAME_W+100)-50, 60+i*45+Math.sin(Date.now()*0.003+i)*15, 10, Math.sin(Date.now()*0.01+i)*0.6);
     }
     ctx.globalAlpha = 1;
   }
@@ -514,200 +399,171 @@ function drawBackground() {
 
 function spawnParticles(x, y, count, color) {
   for (let i = 0; i < count; i++) {
-    particles.push({
-      x, y,
-      vx: (Math.random() - 0.5) * 6,
-      vy: (Math.random() - 0.5) * 6 - 2,
-      life: 1,
-      decay: 0.018 + Math.random() * 0.04,
-      color,
-      size: 2 + Math.random() * 4,
-    });
+    particles.push({ x, y, vx: (Math.random()-0.5)*6, vy: (Math.random()-0.5)*6-2, life: 1, decay: 0.018+Math.random()*0.04, color, size: 2+Math.random()*4 });
   }
 }
 
-// ==================== Level Data ====================
-function buildLevel(index) {
-  const levels = [
-    { // 第一幕 · 山间初遇 — 简单，短而甜
+// ==================== Level Data (6 levels) ====================
+function buildLevel(index, diff) {
+  const diffCfg = DIFFICULTY[diff] || DIFFICULTY.NORMAL;
+  const enemyCountAdd = diffCfg.enemyCountAdd;
+
+  // Enemy templates for each level - we pick a subset based on difficulty
+  const allEnemies = [
+    // Level 0 - 山间初遇
+    [
+      { x: 600, y: 428, w: 32, h: 32, minX: 550, maxX: 640, label: '怀疑' },
+      { x: 1600, y: 428, w: 32, h: 32, minX: 1530, maxX: 1700, label: '距离' },
+      { x: 2200, y: 428, w: 32, h: 32, minX: 2150, maxX: 2300, label: '怀疑', isFast: true }, // extra for hard
+    ],
+    // Level 1 - 雾起同行
+    [
+      { x: 500, y: 428, w: 32, h: 32, minX: 460, maxX: 540, label: '怀疑' },
+      { x: 1100, y: 428, w: 32, h: 32, minX: 1050, maxX: 1200, label: '距离' },
+      { x: 1700, y: 428, w: 32, h: 32, minX: 1650, maxX: 1800, label: '时间' },
+      { x: 2400, y: 428, w: 32, h: 32, minX: 2350, maxX: 2550, label: '孤独', isFast: true },
+    ],
+    // Level 2 - 风急蝶惊
+    [
+      { x: 450, y: 428, w: 32, h: 32, minX: 400, maxX: 520, label: '距离' },
+      { x: 950, y: 428, w: 32, h: 32, minX: 900, maxX: 1050, label: '时间' },
+      { x: 1450, y: 428, w: 32, h: 32, minX: 1400, maxX: 1550, label: '怀疑' },
+      { x: 2050, y: 428, w: 32, h: 32, minX: 2000, maxX: 2200, label: '孤独', isFast: true },
+      { x: 2700, y: 428, w: 32, h: 32, minX: 2650, maxX: 2850, label: '恐惧', isFast: true },
+    ],
+    // Level 3 - 穿山越岭
+    [
+      { x: 420, y: 428, w: 32, h: 32, minX: 380, maxX: 500, label: '时间' },
+      { x: 900, y: 428, w: 32, h: 32, minX: 860, maxX: 1000, label: '距离' },
+      { x: 1400, y: 428, w: 32, h: 32, minX: 1350, maxX: 1500, label: '孤独', isFast: true },
+      { x: 1900, y: 428, w: 32, h: 32, minX: 1850, maxX: 2000, label: '怀疑' },
+      { x: 2400, y: 428, w: 32, h: 32, minX: 2350, maxX: 2550, label: '恐惧', isFast: true },
+      { x: 3000, y: 428, w: 32, h: 32, minX: 2950, maxX: 3150, label: '时间' },
+    ],
+    // Level 4 - 星河暗涌
+    [
+      { x: 400, y: 428, w: 32, h: 32, minX: 350, maxX: 480, label: '恐惧', isFast: true },
+      { x: 880, y: 428, w: 32, h: 32, minX: 840, maxX: 980, label: '孤独', isFast: true },
+      { x: 1350, y: 428, w: 32, h: 32, minX: 1300, maxX: 1450, label: '时间' },
+      { x: 1800, y: 428, w: 32, h: 32, minX: 1750, maxX: 1950, label: '距离' },
+      { x: 2300, y: 428, w: 32, h: 32, minX: 2250, maxX: 2450, label: '恐惧', isFast: true },
+      { x: 2800, y: 428, w: 32, h: 32, minX: 2750, maxX: 2950, label: '孤独', isFast: true },
+      { x: 3350, y: 428, w: 32, h: 32, minX: 3300, maxX: 3500, label: '怀疑' },
+    ],
+    // Level 5 - 岚归蝶舞
+    [
+      { x: 380, y: 428, w: 32, h: 32, minX: 330, maxX: 500, label: '时间' },
+      { x: 820, y: 428, w: 32, h: 32, minX: 780, maxX: 920, label: '恐惧', isFast: true },
+      { x: 1250, y: 428, w: 32, h: 32, minX: 1200, maxX: 1350, label: '孤独', isFast: true },
+      { x: 1700, y: 428, w: 32, h: 32, minX: 1650, maxX: 1850, label: '距离' },
+      { x: 2150, y: 428, w: 32, h: 32, minX: 2100, maxX: 2300, label: '恐惧', isFast: true },
+      { x: 2650, y: 428, w: 32, h: 32, minX: 2600, maxX: 2800, label: '孤独', isFast: true },
+      { x: 3150, y: 428, w: 32, h: 32, minX: 3100, maxX: 3350, label: '时间' },
+      { x: 3700, y: 428, w: 32, h: 32, minX: 3650, maxX: 3900, label: '恐惧', isFast: true },
+    ],
+  ];
+
+  // Pick enemy count based on difficulty
+  const rawEnemies = allEnemies[Math.min(index, 5)] || allEnemies[0];
+  // Take base enemies, remove from end for easy, add extras for hard
+  const baseCount = Math.max(2, rawEnemies.length - 1); // normal: all but last
+  let count;
+  if (enemyCountAdd < 0) count = Math.max(1, baseCount + enemyCountAdd);
+  else if (enemyCountAdd > 0) count = Math.min(rawEnemies.length, baseCount + enemyCountAdd);
+  else count = baseCount;
+
+  const selectedEnemies = rawEnemies.slice(0, count);
+
+  const levelData = [
+    { // Level 0 - 山间初遇 (short, easy)
       width: 3000,
-      platforms: [
-        { x: 0, y: 460, w: 380, h: 80 },
-        { x: 460, y: 460, w: 200, h: 80 },
-        { x: 740, y: 460, w: 280, h: 80 },
-        { x: 1100, y: 460, w: 250, h: 80 },
-        { x: 1430, y: 460, w: 340, h: 80 },
-        { x: 1850, y: 460, w: 380, h: 80 },
-        { x: 2310, y: 460, w: 320, h: 80 },
-        { x: 2710, y: 460, w: 320, h: 80 },
-        // Floating
-        { x: 350, y: 390, w: 130, h: 24 },
-        { x: 640, y: 350, w: 120, h: 24 },
-        { x: 1020, y: 370, w: 130, h: 24 },
-        { x: 1350, y: 330, w: 140, h: 24 },
-        { x: 1680, y: 380, w: 160, h: 24 },
-        { x: 2000, y: 340, w: 140, h: 24 },
-        { x: 2400, y: 310, w: 140, h: 24 },
-        { x: 2650, y: 370, w: 130, h: 24 },
-      ],
-      feathers: [
-        { x: 390, y: 350 }, { x: 680, y: 310 },
-        { x: 1060, y: 330 }, { x: 1390, y: 290 },
-        { x: 1500, y: 420 }, { x: 1730, y: 340 },
-        { x: 2050, y: 300 }, { x: 2440, y: 270 },
-        { x: 2700, y: 330 }, { x: 2850, y: 420 },
-      ],
-      enemies: [
-        { x: 580, y: 428, w: 32, h: 32, minX: 540, maxX: 620, label: '怀疑' },
-        { x: 1550, y: 428, w: 32, h: 32, minX: 1500, maxX: 1700, label: '距离' },
-      ],
-      goal: { x: 2870, y: 380 },
-      spawn: { x: 40, y: 400 },
+      ground: [[0,460,380],[460,460,200],[740,460,280],[1100,460,250],[1430,460,340],[1850,460,380],[2310,460,320],[2710,460,320]],
+      floating: [[350,390,130],[640,350,120],[1020,370,130],[1350,330,140],[1680,380,160],[2000,340,140],[2400,310,140],[2650,370,130]],
+      feathers: [[390,350],[680,310],[1060,330],[1390,290],[1500,420],[1730,340],[2050,300],[2440,270],[2700,330],[2850,420]],
+      goal: [2870, 380], spawn: [40, 400],
     },
-    { // 第二幕 · 雾散寻蝶 — 中等，路长一点
-      width: 4000,
-      platforms: [
-        { x: 0, y: 460, w: 340, h: 80 },
-        { x: 420, y: 460, w: 180, h: 80 },
-        { x: 680, y: 460, w: 220, h: 80 },
-        { x: 980, y: 460, w: 190, h: 80 },
-        { x: 1250, y: 460, w: 300, h: 80 },
-        { x: 1630, y: 460, w: 210, h: 80 },
-        { x: 1920, y: 460, w: 340, h: 80 },
-        { x: 2340, y: 460, w: 230, h: 80 },
-        { x: 2650, y: 460, w: 300, h: 80 },
-        { x: 3030, y: 460, w: 400, h: 80 },
-        { x: 3500, y: 460, w: 520, h: 80 },
-        // Floating
-        { x: 300, y: 400, w: 140, h: 24 },
-        { x: 560, y: 360, w: 150, h: 24 },
-        { x: 860, y: 320, w: 150, h: 24 },
-        { x: 1150, y: 380, w: 140, h: 24 },
-        { x: 1500, y: 330, w: 170, h: 24 },
-        { x: 1800, y: 390, w: 140, h: 24 },
-        { x: 2200, y: 340, w: 160, h: 24 },
-        { x: 2550, y: 310, w: 150, h: 24 },
-        { x: 2900, y: 370, w: 160, h: 24 },
-        { x: 3300, y: 330, w: 180, h: 24 },
-        { x: 3650, y: 290, w: 150, h: 24 },
-      ],
-      feathers: [
-        { x: 340, y: 360 }, { x: 600, y: 320 },
-        { x: 900, y: 280 }, { x: 1190, y: 340 },
-        { x: 1350, y: 420 }, { x: 1540, y: 290 },
-        { x: 1850, y: 350 }, { x: 2100, y: 420 },
-        { x: 2240, y: 300 }, { x: 2480, y: 420 },
-        { x: 2590, y: 270 }, { x: 2940, y: 330 },
-        { x: 3150, y: 420 }, { x: 3340, y: 290 },
-        { x: 3690, y: 250 },
-      ],
-      enemies: [
-        { x: 530, y: 428, w: 32, h: 32, minX: 480, maxX: 580, label: '距离' },
-        { x: 1100, y: 428, w: 32, h: 32, minX: 1050, maxX: 1200, label: '怀疑' },
-        { x: 1750, y: 428, w: 32, h: 32, minX: 1700, maxX: 1820, label: '时间' },
-        { x: 2450, y: 428, w: 32, h: 32, minX: 2400, maxX: 2550, label: '距离' },
-      ],
-      goal: { x: 3800, y: 380 },
-      spawn: { x: 40, y: 400 },
+    { // Level 1 - 雾起同行
+      width: 3500,
+      ground: [[0,460,330],[410,460,180],[670,460,230],[980,460,200],[1260,460,310],[1650,460,220],[1950,460,340],[2370,460,240],[2690,460,320],[3090,460,440]],
+      floating: [[300,400,140],[560,360,150],[860,320,150],[1150,380,140],[1520,340,170],[1820,400,140],[2220,340,160],[2580,310,150],[2930,370,160],[3320,330,160]],
+      feathers: [[340,360],[600,320],[900,280],[1190,340],[1350,420],[1560,300],[1870,360],[2120,420],[2260,300],[2500,420],[2620,270],[2970,330],[3180,420],[3400,290]],
+      goal: [3320, 380], spawn: [40, 400],
     },
-    { // 第三幕 · 岚归蝶舞 — 最长，最后的考验
+    { // Level 2 - 风急蝶惊
+      width: 3800,
+      ground: [[0,460,300],[380,460,160],[620,460,200],[900,460,170],[1150,460,260],[1490,460,190],[1760,460,310],[2150,460,220],[2450,460,350],[2880,460,240],[3200,460,300],[3580,460,440]],
+      floating: [[270,390,140],[500,350,140],[760,310,130],[1030,370,140],[1360,320,160],[1630,380,150],[2000,330,150],[2300,300,140],[2720,360,160],[3040,310,150],[3420,340,160]],
+      feathers: [[310,350],[540,310],[800,270],[1070,330],[1220,420],[1400,280],[1580,420],[1680,340],[1900,420],[2040,290],[2220,420],[2340,260],[2600,420],[2760,320],[2950,420],[3080,270],[3300,420],[3460,310]],
+      goal: [3620, 380], spawn: [40, 400],
+    },
+    { // Level 3 - 穿山越岭 (longer gaps)
+      width: 4200,
+      ground: [[0,460,280],[360,460,150],[590,460,200],[870,460,160],[1110,460,250],[1440,460,180],[1700,460,310],[2090,460,200],[2370,460,330],[2780,460,230],[3090,460,310],[3480,460,350],[3910,460,440]],
+      floating: [[250,390,140],[480,340,140],[730,300,130],[1000,360,140],[1320,310,160],[1580,370,150],[1950,320,140],[2250,290,140],[2650,350,160],[2960,300,150],[3350,340,160],[3720,300,160]],
+      feathers: [[290,350],[520,300],[770,260],[1040,320],[1180,420],[1360,270],[1540,420],[1620,340],[1840,420],[2000,290],[2180,420],[2300,260],[2530,420],[2700,320],[2880,420],[3000,270],[3220,420],[3400,310],[3580,420],[3780,260]],
+      goal: [3950, 380], spawn: [40, 400],
+    },
+    { // Level 4 - 星河暗涌 (dark, tricky)
+      width: 4500,
+      ground: [[0,460,260],[340,460,150],[570,460,190],[840,460,160],[1080,460,240],[1400,460,170],[1650,460,300],[2030,460,200],[2310,460,340],[2730,460,220],[3030,460,310],[3420,460,350],[3850,460,300],[4230,460,440]],
+      floating: [[230,380,140],[450,330,140],[710,290,130],[960,350,140],[1270,300,160],[1520,370,150],[1880,310,150],[2180,280,140],[2580,340,160],[2900,300,150],[3280,340,160],[3650,290,160],[4020,330,150]],
+      feathers: [[270,340],[490,290],[750,250],[1000,310],[1130,420],[1310,260],[1480,420],[1560,340],[1750,420],[1930,290],[2100,420],[2220,260],[2450,420],[2620,320],[2800,420],[2950,270],[3120,420],[3320,310],[3500,420],[3700,260],[3920,420],[4100,290]],
+      goal: [4270, 380], spawn: [40, 400],
+    },
+    { // Level 5 - 岚归蝶舞 (final, hardest)
       width: 5000,
-      platforms: [
-        { x: 0, y: 460, w: 300, h: 80 },
-        { x: 380, y: 460, w: 150, h: 80 },
-        { x: 610, y: 460, w: 200, h: 80 },
-        { x: 890, y: 460, w: 160, h: 80 },
-        { x: 1130, y: 460, w: 250, h: 80 },
-        { x: 1460, y: 460, w: 180, h: 80 },
-        { x: 1720, y: 460, w: 300, h: 80 },
-        { x: 2100, y: 460, w: 200, h: 80 },
-        { x: 2380, y: 460, w: 350, h: 80 },
-        { x: 2810, y: 460, w: 220, h: 80 },
-        { x: 3120, y: 460, w: 300, h: 80 },
-        { x: 3500, y: 460, w: 400, h: 80 },
-        { x: 3980, y: 460, w: 350, h: 80 },
-        { x: 4410, y: 460, w: 600, h: 80 },
-        // Floating
-        { x: 260, y: 390, w: 140, h: 24 },
-        { x: 490, y: 350, w: 140, h: 24 },
-        { x: 750, y: 310, w: 130, h: 24 },
-        { x: 1020, y: 370, w: 140, h: 24 },
-        { x: 1340, y: 320, w: 160, h: 24 },
-        { x: 1610, y: 380, w: 150, h: 24 },
-        { x: 1990, y: 330, w: 140, h: 24 },
-        { x: 2280, y: 300, w: 140, h: 24 },
-        { x: 2690, y: 360, w: 160, h: 24 },
-        { x: 3010, y: 310, w: 150, h: 24 },
-        { x: 3390, y: 350, w: 160, h: 24 },
-        { x: 3760, y: 300, w: 180, h: 24 },
-        { x: 4160, y: 340, w: 160, h: 24 },
-        { x: 4560, y: 290, w: 150, h: 24 },
-      ],
-      feathers: [
-        { x: 300, y: 350 }, { x: 530, y: 310 },
-        { x: 790, y: 270 }, { x: 1060, y: 330 },
-        { x: 1200, y: 420 }, { x: 1380, y: 280 },
-        { x: 1560, y: 420 }, { x: 1650, y: 340 },
-        { x: 1860, y: 420 }, { x: 2030, y: 290 },
-        { x: 2210, y: 420 }, { x: 2320, y: 260 },
-        { x: 2560, y: 420 }, { x: 2730, y: 320 },
-        { x: 2910, y: 420 }, { x: 3050, y: 270 },
-        { x: 3260, y: 420 }, { x: 3430, y: 310 },
-        { x: 3610, y: 420 }, { x: 3800, y: 260 },
-        { x: 4060, y: 420 }, { x: 4210, y: 300 },
-        { x: 4460, y: 420 }, { x: 4600, y: 250 },
-      ],
-      enemies: [
-        { x: 440, y: 428, w: 32, h: 32, minX: 410, maxX: 510, label: '怀疑' },
-        { x: 940, y: 428, w: 32, h: 32, minX: 910, maxX: 1020, label: '时间' },
-        { x: 1360, y: 428, w: 32, h: 32, minX: 1300, maxX: 1410, label: '距离' },
-        { x: 1820, y: 428, w: 32, h: 32, minX: 1760, maxX: 1960, label: '怀疑' },
-        { x: 2500, y: 428, w: 32, h: 32, minX: 2450, maxX: 2600, label: '时间' },
-        { x: 3200, y: 428, w: 32, h: 32, minX: 3150, maxX: 3350, label: '距离' },
-      ],
-      goal: { x: 4780, y: 380 },
-      spawn: { x: 40, y: 400 },
+      ground: [[0,460,250],[330,460,140],[550,460,180],[810,460,150],[1040,460,230],[1350,460,170],[1600,460,290],[1970,460,200],[2250,460,340],[2670,460,210],[2960,460,310],[3350,460,350],[3780,460,300],[4160,460,400],[4640,460,440]],
+      floating: [[220,380,140],[430,330,150],[690,280,130],[940,340,140],[1230,290,160],[1470,370,150],[1830,300,150],[2120,270,140],[2520,340,160],[2840,290,150],[3220,330,160],[3600,280,170],[3980,320,150],[4400,280,160]],
+      feathers: [[260,340],[470,290],[730,240],[980,300],[1100,420],[1280,260],[1420,420],[1520,340],[1700,420],[1870,290],[2050,420],[2160,260],[2400,420],[2570,320],[2750,420],[2890,270],[3060,420],[3260,310],[3440,420],[3650,260],[3850,420],[4040,300],[4230,420],[4450,260]],
+      goal: [4680, 380], spawn: [40, 400],
     },
   ];
-  return levels[index];
+  const d = levelData[Math.min(index, 5)] || levelData[0];
+
+  return {
+    width: d.width,
+    platforms: d.ground.map(p => ({ x: p[0], y: p[1], w: p[2], h: 80 }))
+      .concat(d.floating.map(p => ({ x: p[0], y: p[1], w: p[2], h: 24 }))),
+    feathers: d.feathers.map(p => ({ x: p[0], y: p[1] })),
+    enemies: selectedEnemies,
+    goal: { x: d.goal[0], y: d.goal[1] },
+    spawn: { x: d.spawn[0], y: d.spawn[1] },
+  };
 }
 
 function loadLevel(index) {
-  const data = buildLevel(index);
+  const data = buildLevel(index, difficulty);
   platforms = data.platforms;
   butterflyFeathers = data.feathers.map(h => ({ ...h, collected: false, bobOffset: Math.random() * Math.PI * 2 }));
-  enemies = data.enemies.map(e => ({ ...e, alive: true, dir: 1, speed: 1.5 + index * 0.35 }));
-  goal.x = data.goal.x;
-  goal.y = data.goal.y;
-  player.x = data.spawn.x;
-  player.y = data.spawn.y;
+  enemies = data.enemies.map(e => ({ ...e, alive: true, dir: 1, speed: (1.5 + index * 0.3) * (DIFFICULTY[difficulty]?.enemySpeedMul || 1) }));
+  goal.x = data.goal.x; goal.y = data.goal.y;
+  player.x = data.spawn.x; player.y = data.spawn.y;
   player.vx = 0; player.vy = 0;
   player.onGround = false;
   player.invincible = 0;
+  coyoteTimer = 0; jumpBufferTimer = 0; jumpHeld = false; prevOnGround = false;
   particles = [];
   camera.x = 0; camera.y = 0;
   platforms._levelWidth = data.width;
 }
 
-// ==================== Physics & Collision ====================
+// ==================== Physics ====================
 function rectsCollide(a, b) {
-  return a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y;
+  return a.x < b.x+b.w && a.x+a.w > b.x && a.y < b.y+b.h && a.y+a.h > b.y;
 }
 
 function resolvePlatforms() {
   player.onGround = false;
   for (const p of platforms) {
     if (!rectsCollide(player, p)) continue;
-    const ol = (player.x + player.w) - p.x;
-    const or = (p.x + p.w) - player.x;
-    const ot = (player.y + player.h) - p.y;
-    const ob = (p.y + p.h) - player.y;
+    const ol = (player.x+player.w)-p.x, or = (p.x+p.w)-player.x;
+    const ot = (player.y+player.h)-p.y, ob = (p.y+p.h)-player.y;
     if (Math.min(ol, or) < Math.min(ot, ob)) {
-      if (ol < or) { player.x = p.x - player.w; } else { player.x = p.x + p.w; }
+      if (ol < or) { player.x = p.x-player.w; } else { player.x = p.x+p.w; }
       player.vx = 0;
     } else {
-      if (ot < ob) { player.y = p.y - player.h; player.vy = 0; player.onGround = true; }
-      else { player.y = p.y + p.h; player.vy = 0; }
+      if (ot < ob) { player.y = p.y-player.h; player.vy = 0; player.onGround = true; }
+      else { player.y = p.y+p.h; player.vy = 0; }
     }
   }
 }
@@ -717,19 +573,15 @@ function checkEnemyCollisions() {
   for (const e of enemies) {
     if (!e.alive) continue;
     if (!rectsCollide(player, e)) continue;
-    const isStomp = player.vy > 0 && (player.y + player.h) - e.y < 18;
+    const isStomp = player.vy > 0 && (player.y+player.h)-e.y < 18;
     if (isStomp) {
-      e.alive = false;
-      player.vy = -7;
-      score += 100;
-      spawnParticles(e.x + e.w / 2, e.y + e.h / 2, 12, '#ffd700');
+      e.alive = false; player.vy = -7; score += 100;
+      spawnParticles(e.x+e.w/2, e.y+e.h/2, 12, '#ffd700');
       shakeTimer = 8; shakeIntensity = 3;
     } else {
-      lives--;
-      player.invincible = 90;
-      player.vy = -8;
-      player.vx = (player.x < e.x) ? -6 : 6;
-      spawnParticles(player.x + player.w / 2, player.y + player.h / 2, 15, '#ff6666');
+      lives--; player.invincible = 90;
+      player.vy = -8; player.vx = (player.x < e.x) ? -6 : 6;
+      spawnParticles(player.x+player.w/2, player.y+player.h/2, 15, '#ff6666');
       shakeTimer = 15; shakeIntensity = 6;
       if (lives <= 0) { gameState = STATE.GAMEOVER; }
     }
@@ -739,25 +591,41 @@ function checkEnemyCollisions() {
 function collectFeathers() {
   for (const f of butterflyFeathers) {
     if (f.collected) continue;
-    if (rectsCollide(player, { x: f.x - 10, y: f.y - 10, w: 20, h: 20 })) {
-      f.collected = true;
-      score += 50;
+    if (rectsCollide(player, { x: f.x-10, y: f.y-10, w: 20, h: 20 })) {
+      f.collected = true; score += 50;
       spawnParticles(f.x, f.y, 8, '#e8a0d0');
     }
   }
 }
 
 // ==================== Update ====================
-const GRAVITY = 0.58;
-const JUMP_FORCE = -11.5;
-const MOVE_SPEED = 4.5;
-const MAX_FALL = 14;
+const GRAVITY = 0.55;
+const JUMP_FORCE = -11;
+const SHORT_JUMP_FORCE = -5;
+const MOVE_SPEED = 5;
+const MOVE_FRICTION = 0.55;
+const MAX_FALL = 13;
+const JUMP_BUFFER_FRAMES = 10;
 
 function update() {
   if (gameState === STATE.START) {
-    if (keys['Space'] || keys['ArrowUp'] || keys['KeyW']) { startGame(); }
+    if (keys['Space'] || keys['ArrowUp'] || keys['KeyW']) {
+      gameState = STATE.MODE_SELECT;
+      levelTransitionTimer = 0;
+      // Clear keys so we don't immediately select a mode
+      keys['Space'] = false; keys['ArrowUp'] = false; keys['KeyW'] = false;
+      jumpBufferTimer = 0;
+    }
     return;
   }
+
+  if (gameState === STATE.MODE_SELECT) {
+    if (keys['Mode1'] || keys['Digit1']) { difficulty = 'EASY'; startGame(); return; }
+    if (keys['Mode2'] || keys['Digit2']) { difficulty = 'NORMAL'; startGame(); return; }
+    if (keys['Mode3'] || keys['Digit3']) { difficulty = 'HARD'; startGame(); return; }
+    return;
+  }
+
   if (gameState === STATE.LEVEL_COMPLETE) {
     levelTransitionTimer--;
     if (levelTransitionTimer <= 0 && (keys['Space'] || keys['ArrowUp'] || keys['KeyW'])) { nextLevel(); }
@@ -766,8 +634,9 @@ function update() {
   if (gameState === STATE.WIN || gameState === STATE.GAMEOVER) {
     levelTransitionTimer--;
     if (levelTransitionTimer <= 30 && (keys['Space'] || keys['ArrowUp'] || keys['KeyW'])) {
-      currentLevel = 0; score = 0; lives = 5;
-      loadLevel(0); gameState = STATE.PLAYING;
+      gameState = STATE.MODE_SELECT;
+      keys['Space'] = false; keys['ArrowUp'] = false; keys['KeyW'] = false;
+      jumpBufferTimer = 0;
     }
     return;
   }
@@ -776,11 +645,30 @@ function update() {
   // Input
   if (keys['ArrowLeft'] || keys['KeyA']) { player.vx = -MOVE_SPEED; player.facing = -1; }
   else if (keys['ArrowRight'] || keys['KeyD']) { player.vx = MOVE_SPEED; player.facing = 1; }
-  else { player.vx *= 0.7; }
+  else { player.vx *= MOVE_FRICTION; if (Math.abs(player.vx) < 0.3) player.vx = 0; }
 
-  if ((keys['Space'] || keys['ArrowUp'] || keys['KeyW']) && player.onGround) {
+  // Coyote time
+  if (player.onGround && !prevOnGround) coyoteTimer = DIFFICULTY[difficulty]?.coyote || 8;
+  prevOnGround = player.onGround;
+  if (player.onGround) coyoteTimer = DIFFICULTY[difficulty]?.coyote || 8;
+
+  if (jumpBufferTimer > 0) jumpBufferTimer--;
+
+  const jumpPressed = keys['Space'] || keys['ArrowUp'] || keys['KeyW'];
+
+  if (jumpPressed && !jumpHeld && (player.onGround || coyoteTimer > 0)) {
     player.vy = JUMP_FORCE; player.onGround = false;
+    coyoteTimer = 0; jumpBufferTimer = 0; jumpHeld = true;
+  } else if (jumpPressed && !jumpHeld && player.onGround && jumpBufferTimer > 0) {
+    player.vy = JUMP_FORCE; player.onGround = false;
+    coyoteTimer = 0; jumpBufferTimer = 0; jumpHeld = true;
   }
+
+  if (!jumpPressed && jumpHeld && player.vy < SHORT_JUMP_FORCE) {
+    player.vy = SHORT_JUMP_FORCE; jumpHeld = false;
+  }
+  if (!jumpPressed) jumpHeld = false;
+  if (coyoteTimer > 0 && !player.onGround) coyoteTimer--;
 
   // Physics
   player.vy += GRAVITY;
@@ -789,18 +677,17 @@ function update() {
   player.x += player.vx;
   const lvlW = platforms._levelWidth || 3000;
   if (player.x < 0) player.x = 0;
-  if (player.x > lvlW - player.w) player.x = lvlW - player.w;
+  if (player.x > lvlW-player.w) player.x = lvlW-player.w;
   resolvePlatforms();
-
   player.y += player.vy;
   resolvePlatforms();
 
   // Fall off
-  if (player.y > GAME_H + 50) {
+  if (player.y > GAME_H+50) {
     lives--;
     if (lives <= 0) { gameState = STATE.GAMEOVER; levelTransitionTimer = 90; return; }
     player.invincible = 60;
-    const d = buildLevel(currentLevel);
+    const d = buildLevel(currentLevel, difficulty);
     player.x = d.spawn.x; player.y = d.spawn.y;
     player.vx = 0; player.vy = 0;
   }
@@ -813,7 +700,7 @@ function update() {
   for (const e of enemies) {
     if (!e.alive) continue;
     e.x += e.dir * e.speed;
-    if (e.x <= e.minX || e.x + e.w >= e.maxX) e.dir *= -1;
+    if (e.x <= e.minX || e.x+e.w >= e.maxX) e.dir *= -1;
   }
 
   checkEnemyCollisions();
@@ -825,17 +712,17 @@ function update() {
   if (shakeTimer > 0) shakeTimer--;
 
   // Camera
-  const targetCamX = player.x - GAME_W / 2 + player.w / 2;
-  camera.x += (targetCamX - camera.x) * 0.12;
+  const targetCamX = player.x-GAME_W/2+player.w/2;
+  camera.x += (targetCamX-camera.x)*0.12;
   if (camera.x < 0) camera.x = 0;
-  if (camera.x > lvlW - GAME_W) camera.x = lvlW - GAME_W;
+  if (camera.x > lvlW-GAME_W) camera.x = lvlW-GAME_W;
 
   // Goal
   if (rectsCollide(player, { x: goal.x, y: goal.y, w: goal.w, h: goal.h })) {
     gameState = STATE.LEVEL_COMPLETE;
     levelTransitionTimer = 70;
-    spawnParticles(goal.x, goal.y + goal.h / 2, 35, '#ffd700');
-    spawnParticles(goal.x, goal.y + goal.h / 2, 25, '#e8a0d0');
+    spawnParticles(goal.x, goal.y+goal.h/2, 35, '#ffd700');
+    spawnParticles(goal.x, goal.y+goal.h/2, 25, '#e8a0d0');
   }
 }
 
@@ -845,9 +732,7 @@ function render() {
 
   ctx.save();
   if (shakeTimer > 0) {
-    const sx = (Math.random() - 0.5) * shakeIntensity * (shakeTimer / 15);
-    const sy = (Math.random() - 0.5) * shakeIntensity * (shakeTimer / 15);
-    ctx.translate(sx, sy);
+    ctx.translate((Math.random()-0.5)*shakeIntensity*(shakeTimer/15), (Math.random()-0.5)*shakeIntensity*(shakeTimer/15));
     shakeIntensity *= 0.85;
   }
 
@@ -859,231 +744,200 @@ function render() {
   for (const p of platforms) drawPlatform(p);
   drawGoal();
 
-  // Butterfly feathers (蝶羽)
   for (const f of butterflyFeathers) {
     if (f.collected) continue;
-    const bob = Math.sin(Date.now() * 0.004 + f.bobOffset) * 4;
-    drawButterfly(f.x, f.y + bob, 14, Math.sin(Date.now() * 0.01 + f.bobOffset) * 0.5);
+    const bob = Math.sin(Date.now()*0.004+f.bobOffset)*4;
+    drawButterfly(f.x, f.y+bob, 14, Math.sin(Date.now()*0.01+f.bobOffset)*0.5);
     ctx.fillStyle = 'rgba(230,160,200,0.2)';
-    ctx.beginPath();
-    ctx.arc(f.x, f.y + bob, 15, 0, Math.PI * 2);
-    ctx.fill();
+    ctx.beginPath(); ctx.arc(f.x, f.y+bob, 15, 0, Math.PI*2); ctx.fill();
   }
 
   for (const e of enemies) { if (e.alive) drawEnemy(e); }
   drawPlayer();
 
   for (const p of particles) {
-    ctx.globalAlpha = p.life;
-    ctx.fillStyle = p.color;
-    ctx.beginPath();
-    ctx.arc(p.x, p.y, p.size * p.life, 0, Math.PI * 2);
-    ctx.fill();
+    ctx.globalAlpha = p.life; ctx.fillStyle = p.color;
+    ctx.beginPath(); ctx.arc(p.x, p.y, p.size*p.life, 0, Math.PI*2); ctx.fill();
   }
   ctx.globalAlpha = 1;
 
-  ctx.restore(); // camera
-  ctx.restore(); // shake
+  ctx.restore(); ctx.restore();
 
   drawUI();
   if (gameState === STATE.START) drawStartScreen();
+  if (gameState === STATE.MODE_SELECT) drawModeSelect();
   if (gameState === STATE.LEVEL_COMPLETE) drawLevelComplete();
   if (gameState === STATE.WIN) drawWinScreen();
   if (gameState === STATE.GAMEOVER) drawGameOver();
 }
 
 function drawUI() {
-  // Lives as butterflies
-  for (let i = 0; i < lives; i++) {
-    drawButterfly(30 + i * 32, 24, 8, Math.sin(Date.now() * 0.01 + i) * 0.3);
-  }
-  // Score
-  ctx.fillStyle = '#fff';
-  ctx.font = 'bold 18px Georgia, SimSun, serif';
-  ctx.textAlign = 'right';
-  ctx.fillText(`${score} 🦋`, GAME_W - 20, 30);
-  // Level name
-  ctx.fillStyle = 'rgba(255,255,255,0.7)';
-  ctx.font = '14px SimSun, Georgia, serif';
-  ctx.textAlign = 'center';
-  ctx.fillText(STORY.levelNames[currentLevel] || '', GAME_W / 2, 24);
+  for (let i = 0; i < lives; i++) drawButterfly(30+i*32, 24, 8, Math.sin(Date.now()*0.01+i)*0.3);
+  ctx.fillStyle = '#fff'; ctx.font = 'bold 18px Georgia, SimSun, serif'; ctx.textAlign = 'right';
+  ctx.fillText(`${score} 🦋`, GAME_W-20, 30);
+  ctx.fillStyle = 'rgba(255,255,255,0.7)'; ctx.font = '14px SimSun, Georgia, serif'; ctx.textAlign = 'center';
+  const diffName = DIFFICULTY[difficulty]?.name || '';
+  ctx.fillText(`${STORY.levelNames[currentLevel] || ''}  [${diffName}]`, GAME_W/2, 24);
 }
 
 function drawStartScreen() {
-  ctx.fillStyle = 'rgba(20,15,35,0.7)';
-  ctx.fillRect(0, 0, GAME_W, GAME_H);
+  ctx.fillStyle = 'rgba(20,15,35,0.7)'; ctx.fillRect(0, 0, GAME_W, GAME_H);
+  const t = Date.now()*0.001;
 
-  const t = Date.now() * 0.001;
+  ctx.fillStyle = '#e0d0f0'; ctx.font = 'bold 48px SimSun, Georgia, serif'; ctx.textAlign = 'center';
+  ctx.fillText('蝶 舞 岚 间', GAME_W/2, GAME_H/2-100);
+  ctx.fillStyle = 'rgba(220,200,240,0.8)'; ctx.font = 'italic 20px Georgia, SimSun, serif';
+  ctx.fillText('山间有雾，雾中有蝶', GAME_W/2, GAME_H/2-58);
 
-  // Title
-  ctx.fillStyle = '#e0d0f0';
-  ctx.font = 'bold 48px SimSun, Georgia, serif';
-  ctx.textAlign = 'center';
-  ctx.fillText('蝶 舞 岚 间', GAME_W / 2, GAME_H / 2 - 100);
+  const bt = t*0.6;
+  drawButterfly(GAME_W/2-100+Math.sin(bt)*30, GAME_H/2-30, 18, Math.sin(bt*1.5)*0.6);
+  drawButterfly(GAME_W/2+100+Math.cos(bt*0.8)*30, GAME_H/2-26, 14, Math.cos(bt*1.3)*0.6);
 
-  // Subtitle
-  ctx.fillStyle = 'rgba(220,200,240,0.8)';
-  ctx.font = 'italic 20px Georgia, SimSun, serif';
-  ctx.fillText('山间有雾，雾中有蝶', GAME_W / 2, GAME_H / 2 - 58);
+  ctx.fillStyle = 'rgba(255,255,255,0.7)'; ctx.font = '15px SimSun, Georgia, serif';
+  STORY.prologue.split('\n').forEach((line, i) => ctx.fillText(line, GAME_W/2, GAME_H/2+i*24));
 
-  // Decorative butterflies
-  const bt = t * 0.6;
-  drawButterfly(GAME_W / 2 - 100 + Math.sin(bt) * 30, GAME_H / 2 - 30, 18, Math.sin(bt * 1.5) * 0.6);
-  drawButterfly(GAME_W / 2 + 100 + Math.cos(bt * 0.8) * 30, GAME_H / 2 - 26, 14, Math.cos(bt * 1.3) * 0.6);
-
-  // Prologue
-  ctx.fillStyle = 'rgba(255,255,255,0.7)';
-  ctx.font = '15px SimSun, Georgia, serif';
-  const prologueLines = STORY.prologue.split('\n');
-  prologueLines.forEach((line, i) => {
-    ctx.fillText(line, GAME_W / 2, GAME_H / 2 + i * 24);
-  });
-
-  // Start hint
-  const pulse = Math.sin(t * 2) * 0.3 + 0.7;
-  ctx.globalAlpha = pulse;
-  ctx.fillStyle = 'rgba(255,255,255,0.8)';
-  ctx.font = '16px SimSun, Georgia, serif';
-  ctx.fillText('按 空格键 · 开始寻找蝶蝶', GAME_W / 2, GAME_H / 2 + prologueLines.length * 24 + 30);
+  const pulse = Math.sin(t*2)*0.3+0.7;
+  ctx.globalAlpha = pulse; ctx.fillStyle = 'rgba(255,255,255,0.8)'; ctx.font = '16px SimSun, Georgia, serif';
+  ctx.fillText('按 空格键 · 选择游戏模式', GAME_W/2, GAME_H/2+STORY.prologue.split('\n').length*24+35);
   ctx.globalAlpha = 1;
 
-  ctx.font = '12px SimSun, Georgia, serif';
-  ctx.fillStyle = 'rgba(255,255,255,0.35)';
-  ctx.fillText('← → 移动    空格 跳跃    踩敌人消灭阻碍', GAME_W / 2, GAME_H - 30);
+  ctx.font = '12px SimSun, Georgia, serif'; ctx.fillStyle = 'rgba(255,255,255,0.35)';
+  ctx.fillText('← → 移动    空格 跳跃    踩敌人消灭阻碍', GAME_W/2, GAME_H-30);
+}
+
+function drawModeSelect() {
+  ctx.fillStyle = 'rgba(20,15,35,0.72)'; ctx.fillRect(0, 0, GAME_W, GAME_H);
+
+  ctx.fillStyle = '#e0d0f0'; ctx.font = 'bold 36px SimSun, Georgia, serif'; ctx.textAlign = 'center';
+  ctx.fillText('选择游戏难度', GAME_W/2, 130);
+
+  const modes = [DIFFICULTY.EASY, DIFFICULTY.NORMAL, DIFFICULTY.HARD];
+  const keys = ['1', '2', '3'];
+
+  for (let i = 0; i < 3; i++) {
+    const mx = GAME_W/2-200+i*200;
+    const my = 250;
+    const pulse = Math.sin(Date.now()*0.003+i)*0.05+1;
+
+    // Card
+    ctx.fillStyle = `rgba(40,30,60,${0.5+pulse*0.15})`;
+    ctx.strokeStyle = 'rgba(200,180,220,0.4)'; ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.roundRect(mx-80, my-70, 160, 200, 12); ctx.fill(); ctx.stroke();
+
+    // Icon
+    ctx.font = '48px serif'; ctx.textAlign = 'center';
+    ctx.fillText(['🌿','🍂','🔥'][i], mx, my-10);
+
+    // Name
+    ctx.fillStyle = '#fff'; ctx.font = 'bold 20px SimSun, Georgia, serif';
+    ctx.fillText(modes[i].name, mx, my+30);
+
+    // Lives
+    ctx.fillStyle = 'rgba(255,255,255,0.6)'; ctx.font = '13px SimSun, Georgia, serif';
+    let hearts = '';
+    for (let h = 0; h < modes[i].lives; h++) hearts += '❤️';
+    ctx.fillText(hearts, mx, my+52);
+
+    // Desc
+    ctx.fillStyle = 'rgba(255,255,255,0.5)'; ctx.font = '12px SimSun, Georgia, serif';
+    ctx.fillText(modes[i].desc, mx, my+72);
+
+    // Key hint
+    const pulse2 = Math.sin(Date.now()*0.005+i*2)*0.3+0.7;
+    ctx.globalAlpha = pulse2;
+    ctx.fillStyle = 'rgba(255,255,255,0.8)'; ctx.font = 'bold 14px SimSun, Georgia, serif';
+    ctx.fillText(`按 ${keys[i]}`, mx, my+98);
+    ctx.globalAlpha = 1;
+  }
 }
 
 function drawLevelComplete() {
-  ctx.fillStyle = 'rgba(20,15,35,0.72)';
-  ctx.fillRect(0, 0, GAME_W, GAME_H);
+  ctx.fillStyle = 'rgba(20,15,35,0.72)'; ctx.fillRect(0, 0, GAME_W, GAME_H);
+  drawButterfly(GAME_W/2, GAME_H/2-80, 36, Math.sin(Date.now()*0.008)*0.5);
 
-  // Big butterfly
-  drawButterfly(GAME_W / 2, GAME_H / 2 - 80, 36, Math.sin(Date.now() * 0.008) * 0.5);
+  ctx.fillStyle = '#f0d080'; ctx.font = 'bold 34px SimSun, Georgia, serif'; ctx.textAlign = 'center';
+  ctx.fillText(`🦋 第${currentLevel+1}幕通关 🦋`, GAME_W/2, GAME_H/2-20);
 
-  ctx.fillStyle = '#f0d080';
-  ctx.font = 'bold 34px SimSun, Georgia, serif';
-  ctx.textAlign = 'center';
-  ctx.fillText('🦋 蝶羽归岚 🦋', GAME_W / 2, GAME_H / 2 - 20);
-
-  ctx.fillStyle = '#fff';
-  ctx.font = '17px SimSun, Georgia, serif';
+  ctx.fillStyle = '#fff'; ctx.font = '16px SimSun, Georgia, serif';
   const msg = STORY.levelEpilogues[currentLevel] || '';
   const lines = msg.split('\n');
-  lines.forEach((line, i) => {
-    ctx.fillText(line, GAME_W / 2, GAME_H / 2 + i * 28);
-  });
+  lines.forEach((line, i) => ctx.fillText(line, GAME_W/2, GAME_H/2+i*28));
 
   if (levelTransitionTimer < 50) {
-    ctx.globalAlpha = Math.sin(Date.now() * 0.003 * 2) * 0.3 + 0.7;
-    ctx.fillStyle = 'rgba(255,255,255,0.7)';
-    ctx.font = '14px SimSun, Georgia, serif';
-    ctx.fillText('按 空格键 继续前行', GAME_W / 2, GAME_H / 2 + lines.length * 28 + 25);
+    ctx.globalAlpha = Math.sin(Date.now()*0.003*2)*0.3+0.7;
+    ctx.fillStyle = 'rgba(255,255,255,0.7)'; ctx.font = '14px SimSun, Georgia, serif';
+    ctx.fillText('按 空格键 继续前行', GAME_W/2, GAME_H/2+lines.length*28+25);
     ctx.globalAlpha = 1;
   }
 }
 
 function drawWinScreen() {
-  ctx.fillStyle = 'rgba(20,12,35,0.8)';
-  ctx.fillRect(0, 0, GAME_W, GAME_H);
+  ctx.fillStyle = 'rgba(20,12,35,0.8)'; ctx.fillRect(0, 0, GAME_W, GAME_H);
 
-  // Floating butterflies
   for (let i = 0; i < 14; i++) {
-    const bx = (i * 83 + 50) % GAME_W;
-    const by = GAME_H + 50 - ((Date.now() * 0.025 + i * 280) % (GAME_H + 150));
-    const alpha = by > 0 && by < GAME_H ? 0.4 : 0;
-    ctx.globalAlpha = alpha;
-    drawButterfly(bx, by, 8 + (i % 4) * 3, Math.sin(Date.now() * 0.015 + i) * 0.7);
+    const bx = (i*83+50)%GAME_W, by = GAME_H+50-((Date.now()*0.025+i*280)%(GAME_H+150));
+    ctx.globalAlpha = by>0&&by<GAME_H ? 0.4 : 0;
+    drawButterfly(bx, by, 8+(i%4)*3, Math.sin(Date.now()*0.015+i)*0.7);
   }
   ctx.globalAlpha = 1;
 
-  // Love letter card
-  const cX = GAME_W / 2 - 230, cY = 30, cW = 460, cH = 480;
-  ctx.fillStyle = '#faf5f0';
-  ctx.shadowColor = 'rgba(0,0,0,0.35)';
-  ctx.shadowBlur = 35;
-  ctx.fillRect(cX, cY, cW, cH);
-  ctx.shadowBlur = 0;
+  const cX = GAME_W/2-230, cY = 30, cW = 460, cH = 480;
+  ctx.fillStyle = '#faf5f0'; ctx.shadowColor = 'rgba(0,0,0,0.35)'; ctx.shadowBlur = 35;
+  ctx.fillRect(cX, cY, cW, cH); ctx.shadowBlur = 0;
+  ctx.strokeStyle = '#d4b8c8'; ctx.lineWidth = 3;
+  ctx.strokeRect(cX+8, cY+8, cW-16, cH-16);
+  ctx.strokeStyle = '#e8d0e0'; ctx.lineWidth = 1;
+  ctx.strokeRect(cX+18, cY+18, cW-36, cH-36);
 
-  // Border
-  ctx.strokeStyle = '#d4b8c8';
-  ctx.lineWidth = 3;
-  ctx.strokeRect(cX + 8, cY + 8, cW - 16, cH - 16);
-  ctx.strokeStyle = '#e8d0e0';
-  ctx.lineWidth = 1;
-  ctx.strokeRect(cX + 18, cY + 18, cW - 36, cH - 36);
+  ctx.fillStyle = '#b87090'; ctx.font = 'bold 24px SimSun, Georgia, serif'; ctx.textAlign = 'center';
+  ctx.fillText('💌 致我的小蝴蝶', GAME_W/2, cY+48);
 
-  // Title
-  ctx.fillStyle = '#b87090';
-  ctx.font = 'bold 24px SimSun, Georgia, serif';
-  ctx.textAlign = 'center';
-  ctx.fillText('💌 致我的小蝴蝶', GAME_W / 2, cY + 48);
+  ctx.strokeStyle = '#d4b8c8'; ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.moveTo(cX+70, cY+58); ctx.lineTo(cX+cW-70, cY+58); ctx.stroke();
 
-  // Line
-  ctx.strokeStyle = '#d4b8c8';
-  ctx.lineWidth = 1;
-  ctx.beginPath();
-  ctx.moveTo(cX + 70, cY + 58);
-  ctx.lineTo(cX + cW - 70, cY + 58);
-  ctx.stroke();
+  ctx.fillStyle = '#5a4a5a'; ctx.font = '14px SimSun, Georgia, serif';
+  STORY.loveLetter.split('\n').forEach((line, i) => { if (i<20) ctx.fillText(line, GAME_W/2, cY+82+i*21); });
 
-  // Content
-  const letterLines = STORY.loveLetter.split('\n');
-  ctx.fillStyle = '#5a4a5a';
-  ctx.font = '14px SimSun, Georgia, serif';
-  letterLines.forEach((line, i) => {
-    if (i < 20) ctx.fillText(line, GAME_W / 2, cY + 82 + i * 21);
-  });
-
-  // Restart
   if (levelTransitionTimer < 30) {
-    ctx.globalAlpha = Math.sin(Date.now() * 0.003 * 2) * 0.3 + 0.7;
-    ctx.fillStyle = 'rgba(255,255,255,0.8)';
-    ctx.font = '13px SimSun, Georgia, serif';
-    ctx.fillText('按 空格键 再走一次', GAME_W / 2, GAME_H - 12);
+    ctx.globalAlpha = Math.sin(Date.now()*0.003*2)*0.3+0.7;
+    ctx.fillStyle = 'rgba(255,255,255,0.8)'; ctx.font = '13px SimSun, Georgia, serif';
+    ctx.fillText('按 空格键 选择模式再玩一次', GAME_W/2, GAME_H-12);
     ctx.globalAlpha = 1;
   }
 
-  // Orbiting butterflies
-  const orbT = Date.now() * 0.0006;
+  const orbT = Date.now()*0.0006;
   for (let i = 0; i < 8; i++) {
-    const angle = orbT + (i / 8) * Math.PI * 2;
-    const rx = GAME_W / 2 + Math.cos(angle) * (cW / 2 + 38);
-    const ry = cY + cH / 2 + Math.sin(angle) * (cH / 2 + 38);
-    drawButterfly(rx, ry, 9 + Math.sin(orbT + i) * 2, Math.cos(orbT * 1.4 + i) * 0.5);
+    const angle = orbT+(i/8)*Math.PI*2;
+    drawButterfly(GAME_W/2+Math.cos(angle)*(cW/2+38), cY+cH/2+Math.sin(angle)*(cH/2+38), 9+Math.sin(orbT+i)*2, Math.cos(orbT*1.4+i)*0.5);
   }
 }
 
 function drawGameOver() {
-  ctx.fillStyle = 'rgba(15,10,30,0.78)';
-  ctx.fillRect(0, 0, GAME_W, GAME_H);
-
-  ctx.fillStyle = '#d0a0c0';
-  ctx.font = 'bold 34px SimSun, Georgia, serif';
-  ctx.textAlign = 'center';
-  ctx.fillText('雾未散，蝶未远', GAME_W / 2, GAME_H / 2 - 20);
-
-  ctx.fillStyle = 'rgba(255,255,255,0.7)';
-  ctx.font = '16px SimSun, Georgia, serif';
-  ctx.fillText('岚岚不会放弃，正如我不会放弃你', GAME_W / 2, GAME_H / 2 + 25);
-
+  ctx.fillStyle = 'rgba(15,10,30,0.78)'; ctx.fillRect(0, 0, GAME_W, GAME_H);
+  ctx.fillStyle = '#d0a0c0'; ctx.font = 'bold 34px SimSun, Georgia, serif'; ctx.textAlign = 'center';
+  ctx.fillText('雾未散，蝶未远', GAME_W/2, GAME_H/2-20);
+  ctx.fillStyle = 'rgba(255,255,255,0.7)'; ctx.font = '16px SimSun, Georgia, serif';
+  ctx.fillText('岚岚不会放弃，正如我不会放弃你', GAME_W/2, GAME_H/2+25);
   if (levelTransitionTimer < 30) {
-    ctx.globalAlpha = Math.sin(Date.now() * 0.003 * 2) * 0.3 + 0.7;
-    ctx.fillStyle = 'rgba(255,255,255,0.7)';
-    ctx.font = '14px SimSun, Georgia, serif';
-    ctx.fillText('按 空格键 重新出发', GAME_W / 2, GAME_H / 2 + 60);
+    ctx.globalAlpha = Math.sin(Date.now()*0.003*2)*0.3+0.7;
+    ctx.fillStyle = 'rgba(255,255,255,0.7)'; ctx.font = '14px SimSun, Georgia, serif';
+    ctx.fillText('按 空格键 选择模式重新出发', GAME_W/2, GAME_H/2+60);
     ctx.globalAlpha = 1;
   }
 }
 
 // ==================== Game Flow ====================
 function startGame() {
-  currentLevel = 0; score = 0; lives = 5;
+  currentLevel = 0; score = 0;
+  lives = DIFFICULTY[difficulty]?.lives || 5;
   loadLevel(0);
+  coyoteTimer = 0; jumpBufferTimer = 0; jumpHeld = false; prevOnGround = false;
   gameState = STATE.PLAYING;
 }
 
 function nextLevel() {
   currentLevel++;
-  if (currentLevel >= 3) { gameState = STATE.WIN; levelTransitionTimer = 90; }
+  if (currentLevel >= totalLevels) { gameState = STATE.WIN; levelTransitionTimer = 90; }
   else { loadLevel(currentLevel); gameState = STATE.PLAYING; }
 }
 
