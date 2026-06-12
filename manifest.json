@@ -1,0 +1,22 @@
+{
+  "name": "蝶舞岚间",
+  "short_name": "蝶舞岚间",
+  "description": "送给蝶蝶的游戏 - 岚岚寻蝶之旅",
+  "start_url": ".",
+  "display": "standalone",
+  "orientation": "landscape",
+  "background_color": "#1a1a2e",
+  "theme_color": "#1a1a2e",
+  "icons": [
+    {
+      "src": "icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}
