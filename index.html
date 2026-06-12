@@ -46,6 +46,9 @@
       <button class="ctrl-btn" id="btn-right">▶</button>
     </div>
     <div class="ctrl-group">
+      <button class="ctrl-btn" id="btn-attack">⚔</button>
+    </div>
+    <div class="ctrl-group">
       <button class="ctrl-btn jump" id="btn-jump">▲</button>
     </div>
   </div>
@@ -177,13 +180,14 @@ window.addEventListener('keyup', e => {
 function setupMobileButton(id, key) {
   const btn = document.getElementById(id);
   if (!btn) return;
-  btn.addEventListener('pointerdown', e => { e.preventDefault(); keys[key] = true; if (key==='Space') { jumpBufferTimer=JUMP_BUFFER_FRAMES; } });
+  btn.addEventListener('pointerdown', e => { e.preventDefault(); keys[key] = true; if (key==='Space') { jumpBufferTimer=JUMP_BUFFER_FRAMES; } if (key==='Attack') { tryAttack(); } });
   btn.addEventListener('pointerup', e => { e.preventDefault(); keys[key] = false; if (key==='Space') jumpHeld=false; });
   btn.addEventListener('pointerleave', e => { keys[key] = false; if (key==='Space') jumpHeld=false; });
 }
 setupMobileButton('btn-left', 'ArrowLeft');
 setupMobileButton('btn-right', 'ArrowRight');
 setupMobileButton('btn-jump', 'Space');
+setupMobileButton('btn-attack', 'Attack');
 
 // ==================== Game State ====================
 const STATE = { START: 0, MODE_SELECT: 1, PLAYING: 2, LEVEL_COMPLETE: 3, WIN: 4, GAMEOVER: 5 };
