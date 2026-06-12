@@ -117,6 +117,19 @@ const DIFFICULTY = {
   HARD:   { name: '🔥 困难', lives: 3, enemySpeedMul: 1.4,  enemyCountAdd: 1,  coyote: 4,  desc: '高难挑战，全力以赴' },
 };
 
+// 技能/道具系统
+const POWERUP_TYPES = {
+  heal:      { name: '回血', emoji: '❤️', color: '#ff4757', weight: 25, desc: '回复1点生命' },
+  speed:     { name: '加速', emoji: '⚡', color: '#ffd700', weight: 20, desc: '15秒移动加速', duration: 900 },
+  shield:    { name: '无敌', emoji: '🛡️', color: '#7bed9f', weight: 15, desc: '10秒无敌护盾', duration: 600 },
+  double:    { name: '双倍', emoji: '⭐', color: '#ffa502', weight: 15, desc: '20秒双倍分数', duration: 1200 },
+  extraLife: { name: '加命', emoji: '🦋', color: '#ff69b4', weight: 10, desc: '增加1条命' },
+  clearAll:  { name: '全清', emoji: '💥', color: '#ff6348', weight: 5,  desc: '消灭屏幕所有敌人' },
+  slowEnemy: { name: '迟缓', emoji: '🐌', color: '#a4b0be', weight: 10, desc: '10秒敌人减速', duration: 600 },
+};
+const DROP_CHANCE = 0.35; // 35%概率掉落
+const DROP_LIFETIME = 600; // 掉落物存活600帧(10秒)
+
 // ==================== Canvas Setup ====================
 const canvas = document.getElementById('game');
 const ctx = canvas.getContext('2d');
@@ -140,6 +153,10 @@ window.addEventListener('keydown', e => {
   if (e.code === 'Digit1' || e.code === 'KeyE') keys['Mode1'] = true;
   if (e.code === 'Digit2' || e.code === 'KeyN') keys['Mode2'] = true;
   if (e.code === 'Digit3' || e.code === 'KeyH') keys['Mode3'] = true;
+  if (e.code === 'KeyJ' || e.code === 'KeyK') {
+    e.preventDefault();
+    tryAttack(); // 攻击键 — 按J或K
+  }
 });
 window.addEventListener('keyup', e => {
   keys[e.code] = false;
@@ -172,6 +189,8 @@ let totalLevels = 6;
 // Player
 let player = { x: 0, y: -100, w: 32, h: 38, vx: 0, vy: 0, onGround: false, facing: 1, animTimer: 0, invincible: 0, trailTimer: 0 };
 let coyoteTimer = 0, jumpBufferTimer = 0, jumpHeld = false, prevOnGround = false;
+let attackCooldown = 0; // 攻击冷却
+let activeBuffs = {};   // 当前激活的技能效果
 
 // Camera
 let camera = { x: 0, y: 0 };
@@ -181,6 +200,8 @@ let platforms = [];
 let butterflyFeathers = [];
 let enemies = [];
 let particles = [];
+let projectiles = [];    // 攻击弹幕
+let powerupDrops = [];   // 掉落技能包
 let goal = { x: 0, y: 0, w: 24, h: 80 };
 
 // ==================== Drawing ====================
@@ -256,6 +277,13 @@ function drawPlayer() {
   // Blush
   ctx.fillStyle = 'rgba(200,160,180,0.45)';
   ctx.beginPath(); ctx.arc(-9, -1+bob, 3.5, 0, Math.PI*2); ctx.arc(9, -1+bob, 3.5, 0, Math.PI*2); ctx.fill();
+
+  // Shield effect (from powerup)
+  if (player.invincible > 60) {
+    ctx.strokeStyle = `rgba(123,237,159,${0.3+Math.sin(Date.now()*0.01)*0.2})`;
+    ctx.lineWidth = 3;
+    ctx.beginPath(); ctx.arc(0, -2+bob, 20, 0, Math.PI*2); ctx.stroke();
+  }
 
   if (player.trailTimer % 6 === 0) {
     particles.push({ x: x+w/2+(Math.random()-0.5)*20, y: y+h, vx: (Math.random()-0.5)*1.5, vy: -1-Math.random()*2, life: 1, decay: 0.03, color: 'rgba(200,190,220,', size: 3+Math.random()*3 });
@@ -403,6 +431,164 @@ function spawnParticles(x, y, count, color) {
   }
 }
 
+// 攻击系统
+const ATTACK_COOLDOWN = 25; // 攻击冷却帧数(~0.4秒)
+const PROJECTILE_SPEED = 7;
+const PROJECTILE_LIFE = 90;
+
+function tryAttack() {
+  if (attackCooldown > 0) return;
+  if (gameState !== STATE.PLAYING) return;
+  attackCooldown = ATTACK_COOLDOWN;
+  const cx = player.x + player.w/2;
+  const cy = player.y + player.h/2;
+  projectiles.push({
+    x: cx, y: cy - 4,
+    vx: player.facing * PROJECTILE_SPEED,
+    vy: 0,
+    life: PROJECTILE_LIFE,
+  });
+  // 攻击特效
+  spawnParticles(cx + player.facing * 15, cy, 6, '#d0c0f0');
+}
+
+function drawProjectile(p) {
+  const alpha = Math.min(1, p.life / 20);
+  ctx.globalAlpha = alpha;
+  // Glow
+  const glow = ctx.createRadialGradient(p.x, p.y, 2, p.x, p.y, 10);
+  glow.addColorStop(0, 'rgba(220,200,255,0.8)'); glow.addColorStop(1, 'rgba(220,200,255,0)');
+  ctx.fillStyle = glow;
+  ctx.beginPath(); ctx.arc(p.x, p.y, 10, 0, Math.PI*2); ctx.fill();
+  // Core
+  ctx.fillStyle = '#e0d0ff';
+  ctx.beginPath(); ctx.arc(p.x, p.y, 4, 0, Math.PI*2); ctx.fill();
+  ctx.fillStyle = '#fff';
+  ctx.beginPath(); ctx.arc(p.x-1, p.y-1, 1.5, 0, Math.PI*2); ctx.fill();
+  ctx.globalAlpha = 1;
+}
+
+// 技能掉落系统
+function spawnPowerupDrop(x, y) {
+  const types = Object.entries(POWERUP_TYPES);
+  const totalWeight = types.reduce((s, [, t]) => s + t.weight, 0);
+  let roll = Math.random() * totalWeight;
+  let chosen = types[0][0];
+  for (const [key, t] of types) {
+    roll -= t.weight;
+    if (roll <= 0) { chosen = key; break; }
+  }
+  powerupDrops.push({
+    x: x - 12, y: y - 12, w: 24, h: 24,
+    type: chosen,
+    life: DROP_LIFETIME,
+    bobOffset: Math.random() * Math.PI * 2,
+  });
+}
+
+function drawPowerupDrop(d) {
+  const bob = Math.sin(Date.now()*0.005 + d.bobOffset) * 6;
+  const cx = d.x + d.w/2, cy = d.y + d.h/2 + bob;
+  const t = POWERUP_TYPES[d.type];
+  if (!t) return;
+
+  // Fade out when about to expire
+  const fadeAlpha = d.life < 60 ? d.life / 60 : 1;
+  ctx.globalAlpha = fadeAlpha;
+
+  // Glow
+  const glowGrad = ctx.createRadialGradient(cx, cy, 4, cx, cy, 18);
+  glowGrad.addColorStop(0, t.color); glowGrad.addColorStop(1, 'transparent');
+  ctx.fillStyle = glowGrad;
+  ctx.beginPath(); ctx.arc(cx, cy, 18, 0, Math.PI*2); ctx.fill();
+
+  // Backdrop
+  ctx.fillStyle = 'rgba(0,0,0,0.5)';
+  ctx.beginPath(); ctx.arc(cx, cy, 14, 0, Math.PI*2); ctx.fill();
+  ctx.fillStyle = 'rgba(255,255,255,0.15)';
+  ctx.beginPath(); ctx.arc(cx, cy, 12, 0, Math.PI*2); ctx.fill();
+
+  // Emoji
+  ctx.fillStyle = '#fff'; ctx.font = '16px serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.fillText(t.emoji, cx, cy);
+
+  // Expiry bar
+  if (d.life < DROP_LIFETIME * 0.5) {
+    const barW = 20 * (d.life / DROP_LIFETIME);
+    ctx.fillStyle = 'rgba(255,255,255,0.3)'; ctx.fillRect(cx-10, cy+12, 20, 2);
+    ctx.fillStyle = '#fff'; ctx.fillRect(cx-10, cy+12, barW, 2);
+  }
+
+  ctx.globalAlpha = 1;
+}
+
+function collectPowerups() {
+  for (const d of powerupDrops) {
+    if (d.life <= 0) continue;
+    if (rectsCollide(player, d)) {
+      applyPowerup(d.type);
+      d.life = 0;
+      spawnParticles(d.x + d.w/2, d.y + d.h/2, 10, POWERUP_TYPES[d.type]?.color || '#fff');
+    }
+  }
+  powerupDrops = powerupDrops.filter(d => d.life > 0);
+}
+
+function applyPowerup(type) {
+  switch (type) {
+    case 'heal':
+      if (lives < DIFFICULTY[difficulty]?.lives || 5) lives++;
+      break;
+    case 'speed':
+      activeBuffs.speed = 900; // 15秒
+      break;
+    case 'shield':
+      player.invincible = 600; // 10秒无敌
+      spawnParticles(player.x+player.w/2, player.y+player.h/2, 20, '#7bed9f');
+      break;
+    case 'double':
+      activeBuffs.double = 1200; // 20秒
+      break;
+    case 'extraLife':
+      lives++;
+      break;
+    case 'clearAll':
+      for (const e of enemies) {
+        if (e.alive) {
+          e.alive = false;
+          spawnParticles(e.x+e.w/2, e.y+e.h/2, 8, '#ff6348');
+        }
+      }
+      shakeTimer = 12; shakeIntensity = 8;
+      break;
+    case 'slowEnemy':
+      activeBuffs.slowEnemy = 600; // 10秒
+      break;
+  }
+}
+
+function updateBuffs() {
+  for (const key of Object.keys(activeBuffs)) {
+    activeBuffs[key]--;
+    if (activeBuffs[key] <= 0) delete activeBuffs[key];
+  }
+}
+
+function drawBuffUI() {
+  let bx = GAME_W - 20;
+  for (const [type, remaining] of Object.entries(activeBuffs)) {
+    const t = POWERUP_TYPES[type];
+    if (!t) continue;
+    const sec = Math.ceil(remaining / 60);
+    const alpha = remaining < 120 ? 0.5 + Math.sin(Date.now()*0.01)*0.5 : 1;
+    ctx.globalAlpha = alpha;
+    ctx.font = '15px serif'; ctx.textAlign = 'right';
+    ctx.fillText(`${t.emoji} ${sec}s`, bx, 52);
+    bx -= 80;
+  }
+  ctx.globalAlpha = 1;
+}
+
 // ==================== Level Data (6 levels) ====================
 function buildLevel(index, diff) {
   const diffCfg = DIFFICULTY[diff] || DIFFICULTY.NORMAL;
@@ -542,6 +728,7 @@ function loadLevel(index) {
   player.onGround = false;
   player.invincible = 0;
   coyoteTimer = 0; jumpBufferTimer = 0; jumpHeld = false; prevOnGround = false;
+  attackCooldown = 0; activeBuffs = {}; projectiles = []; powerupDrops = [];
   particles = [];
   camera.x = 0; camera.y = 0;
   platforms._levelWidth = data.width;
@@ -575,9 +762,10 @@ function checkEnemyCollisions() {
     if (!rectsCollide(player, e)) continue;
     const isStomp = player.vy > 0 && (player.y+player.h)-e.y < 18;
     if (isStomp) {
-      e.alive = false; player.vy = -7; score += 100;
+      e.alive = false; player.vy = -7; score += 100 * (activeBuffs.double ? 2 : 1);
       spawnParticles(e.x+e.w/2, e.y+e.h/2, 12, '#ffd700');
       shakeTimer = 8; shakeIntensity = 3;
+      if (Math.random() < DROP_CHANCE) spawnPowerupDrop(e.x + e.w/2, e.y + e.h/2);
     } else {
       lives--; player.invincible = 90;
       player.vy = -8; player.vx = (player.x < e.x) ? -6 : 6;
@@ -592,7 +780,7 @@ function collectFeathers() {
   for (const f of butterflyFeathers) {
     if (f.collected) continue;
     if (rectsCollide(player, { x: f.x-10, y: f.y-10, w: 20, h: 20 })) {
-      f.collected = true; score += 50;
+      f.collected = true; score += 50 * (activeBuffs.double ? 2 : 1);
       spawnParticles(f.x, f.y, 8, '#e8a0d0');
     }
   }
@@ -643,8 +831,9 @@ function update() {
   if (gameState !== STATE.PLAYING) return;
 
   // Input
-  if (keys['ArrowLeft'] || keys['KeyA']) { player.vx = -MOVE_SPEED; player.facing = -1; }
-  else if (keys['ArrowRight'] || keys['KeyD']) { player.vx = MOVE_SPEED; player.facing = 1; }
+  const speedMul = activeBuffs.speed ? 1.5 : 1;
+  if (keys['ArrowLeft'] || keys['KeyA']) { player.vx = -MOVE_SPEED * speedMul; player.facing = -1; }
+  else if (keys['ArrowRight'] || keys['KeyD']) { player.vx = MOVE_SPEED * speedMul; player.facing = 1; }
   else { player.vx *= MOVE_FRICTION; if (Math.abs(player.vx) < 0.3) player.vx = 0; }
 
   // Coyote time
@@ -696,12 +885,49 @@ function update() {
   if (Math.abs(player.vx) > 0.5 && player.onGround) player.animTimer++;
   else if (player.onGround) player.animTimer = 0;
 
-  // Enemies
+  // Attack cooldown
+  if (attackCooldown > 0) attackCooldown--;
+
+  // Update buffs
+  updateBuffs();
+
+  // Enemies — apply slow buff
+  const slowMul = activeBuffs.slowEnemy ? 0.4 : 1;
   for (const e of enemies) {
     if (!e.alive) continue;
-    e.x += e.dir * e.speed;
+    const baseSpeed = e.speed / ((DIFFICULTY[difficulty]?.enemySpeedMul || 1));
+    const actualSpeed = (1.5 + currentLevel * 0.3) * (DIFFICULTY[difficulty]?.enemySpeedMul || 1) * slowMul;
+    e.x += e.dir * actualSpeed;
     if (e.x <= e.minX || e.x+e.w >= e.maxX) e.dir *= -1;
   }
+
+  // Projectiles
+  for (const p of projectiles) {
+    p.x += p.vx; p.life--;
+    // Check collision with enemies
+    for (const e of enemies) {
+      if (!e.alive) continue;
+      if (rectsCollide({x:p.x-4,y:p.y-4,w:8,h:8}, e)) {
+        e.alive = false;
+        p.life = 0;
+        score += 100 * (activeBuffs.double ? 2 : 1);
+        spawnParticles(e.x+e.w/2, e.y+e.h/2, 10, '#ffd700');
+        shakeTimer = 5; shakeIntensity = 2;
+        // 概率掉落技能包
+        if (Math.random() < DROP_CHANCE) {
+          spawnPowerupDrop(e.x + e.w/2, e.y + e.h/2);
+        }
+      }
+    }
+  }
+  projectiles = projectiles.filter(p => p.life > 0);
+
+  // Powerup drops — lifetime
+  for (const d of powerupDrops) d.life--;
+  powerupDrops = powerupDrops.filter(d => d.life > 0);
+
+  // Collect powerups
+  collectPowerups();
 
   checkEnemyCollisions();
   collectFeathers();
@@ -753,6 +979,8 @@ function render() {
   }
 
   for (const e of enemies) { if (e.alive) drawEnemy(e); }
+  for (const p of projectiles) drawProjectile(p);
+  for (const d of powerupDrops) drawPowerupDrop(d);
   drawPlayer();
 
   for (const p of particles) {
@@ -778,6 +1006,9 @@ function drawUI() {
   ctx.fillStyle = 'rgba(255,255,255,0.7)'; ctx.font = '14px SimSun, Georgia, serif'; ctx.textAlign = 'center';
   const diffName = DIFFICULTY[difficulty]?.name || '';
   ctx.fillText(`${STORY.levelNames[currentLevel] || ''}  [${diffName}]`, GAME_W/2, 24);
+
+  // Buff status
+  drawBuffUI();
 }
 
 function drawStartScreen() {
@@ -802,7 +1033,7 @@ function drawStartScreen() {
   ctx.globalAlpha = 1;
 
   ctx.font = '12px SimSun, Georgia, serif'; ctx.fillStyle = 'rgba(255,255,255,0.35)';
-  ctx.fillText('← → 移动    空格 跳跃    踩敌人消灭阻碍', GAME_W/2, GAME_H-30);
+  ctx.fillText('← → 移动    空格 跳跃    J键 攻击    踩/射敌人消灭阻碍', GAME_W/2, GAME_H-30);
 }
 
 function drawModeSelect() {
