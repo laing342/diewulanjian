@@ -1,0 +1,1101 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>蝶舞岚间</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: #1a1a2e;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 100vh;
+    overflow: hidden;
+    font-family: 'Georgia', 'SimSun', 'STSong', serif;
+    touch-action: manipulation;
+    -webkit-touch-callout: none;
+    -webkit-user-select: none;
+    user-select: none;
+  }
+  #game-container { position: relative; display: flex; justify-content: center; align-items: center; }
+  canvas { display: block; border-radius: 8px; box-shadow: 0 0 40px rgba(180, 160, 220, 0.35); }
+  #mobile-controls {
+    display: none; position: absolute; bottom: 10px; left: 0; right: 0;
+    padding: 0 10px; justify-content: space-between; pointer-events: none;
+  }
+  .ctrl-group { display: flex; gap: 8px; pointer-events: auto; }
+  .ctrl-btn {
+    width: 56px; height: 56px; border-radius: 50%;
+    border: 2px solid rgba(255,255,255,0.4); background: rgba(255,255,255,0.1);
+    color: white; font-size: 24px; display: flex; align-items: center; justify-content: center;
+    backdrop-filter: blur(4px);
+  }
+  .ctrl-btn:active { background: rgba(255,255,255,0.3); }
+  .ctrl-btn.jump { width: 72px; height: 72px; background: rgba(180,150,220,0.25); border-color: rgba(180,150,220,0.5); }
+  @media (max-width: 768px) { #mobile-controls { display: flex; } }
+</style>
+</head>
+<body>
+<div id="game-container">
+  <canvas id="game"></canvas>
+  <div id="mobile-controls">
+    <div class="ctrl-group">
+      <button class="ctrl-btn" id="btn-left">◀</button>
+      <button class="ctrl-btn" id="btn-right">▶</button>
+    </div>
+    <div class="ctrl-group">
+      <button class="ctrl-btn jump" id="btn-jump">▲</button>
+    </div>
+  </div>
+</div>
+<script>
+// ==================== 🦋 故事配置 — 改这里 ====================
+const STORY = {
+  // 人物
+  herName: '蝶蝶',
+  yourName: '岚岚',
+  herNick: '小蝴蝶',
+  yourNick: '小雾',
+
+  // 标题
+  title: '蝶舞岚间',
+  subtitle: '山间有雾，雾中有蝶',
+
+  // 序章（开始画面下方的小字）
+  prologue: '岚岚是山间的一缕雾，蝶蝶是雾中飞舞的一只蝴蝶。\n岚岚总在清晨出现，只为等蝶蝶穿过他的那一刻。\n\n有一天，一阵风把蝶蝶吹去了远方……\n岚岚决定离开这片山，去找她回来。',
+
+  // 三句关卡名
+  levelNames: [
+    '第一幕 · 山间初遇',
+    '第二幕 · 雾散寻蝶',
+    '第三幕 · 岚归蝶舞',
+  ],
+
+  // 每关通关后弹出的回忆独白
+  levelEpilogues: [
+    '那是一个春天的清晨，\n山雾正浓，一只小蝴蝶落在岚岚的手心。\n他第一次知道了心跳的声音。',
+    '蝶蝶被风吹散了方向，\n岚岚翻过三座山、穿过两条河，\n只要还能看见她的翅膀，他就不会停下。',
+    '他终于找到了她——\n蝴蝶停在最初的枝头，\n雾散去，阳光洒下来，他们再也不会分开。',
+  ],
+
+  // 敌人名字（怀疑、距离、时间）
+  enemyNames: ['怀疑', '距离', '时间'],
+
+  // 情书内容
+  loveLetter: [
+    '亲爱的蝶蝶：',
+    '',
+    '我是岚岚，那缕笨拙的山雾。',
+    '',
+    '遇见你之前，',
+    '我以为自己只是一阵风，',
+    '飘过就算。',
+    '',
+    '可是你来了——',
+    '一只小蝴蝶，',
+    '轻轻扇了扇翅膀，',
+    '我的整个世界都变了。',
+    '',
+    '你知道吗？',
+    '雾是因为有了光才会散，',
+    '而你就是我的光。',
+    '',
+    '每一次见你笑，',
+    '就像清晨第一缕阳光穿过雾气，',
+    '温柔得让我不想飘走。',
+    '',
+    '我想一直这样，',
+    '守在你的旁边，',
+    '做你专属的山雾。',
+    '',
+    '蝶舞岚间，岚随蝶动。',
+    '蝴蝶在哪里，雾就在哪里。',
+    '',
+    '我爱你，蝶蝶。',
+    '',
+    '—— 永远爱你的岚岚',
+  ].join('\n'),
+};
+
+// ==================== Canvas Setup ====================
+const canvas = document.getElementById('game');
+const ctx = canvas.getContext('2d');
+const GAME_W = 960, GAME_H = 540;
+canvas.width = GAME_W;
+canvas.height = GAME_H;
+
+function resize() {
+  const scale = Math.min(window.innerWidth / GAME_W, window.innerHeight / GAME_H) * 0.95;
+  canvas.style.width = (GAME_W * scale) + 'px';
+  canvas.style.height = (GAME_H * scale) + 'px';
+}
+window.addEventListener('resize', resize);
+resize();
+
+// ==================== Input ====================
+const keys = {};
+window.addEventListener('keydown', e => {
+  keys[e.code] = true;
+  if (e.code === 'Space' || e.code === 'ArrowUp') e.preventDefault();
+});
+window.addEventListener('keyup', e => { keys[e.code] = false; });
+
+function setupMobileButton(id, key) {
+  const btn = document.getElementById(id);
+  if (!btn) return;
+  btn.addEventListener('pointerdown', e => { e.preventDefault(); keys[key] = true; });
+  btn.addEventListener('pointerup', e => { e.preventDefault(); keys[key] = false; });
+  btn.addEventListener('pointerleave', e => { keys[key] = false; });
+}
+setupMobileButton('btn-left', 'ArrowLeft');
+setupMobileButton('btn-right', 'ArrowRight');
+setupMobileButton('btn-jump', 'Space');
+
+// ==================== Game State ====================
+const STATE = { START: 0, PLAYING: 1, LEVEL_COMPLETE: 2, WIN: 3, GAMEOVER: 4 };
+let gameState = STATE.START;
+let currentLevel = 0;
+let score = 0;
+let lives = 5;
+let levelTransitionTimer = 0;
+let shakeTimer = 0;
+let shakeIntensity = 0;
+
+// Player — 岚岚：雾霭色的圆润精灵
+let player = { x: 0, y: -100, w: 32, h: 38, vx: 0, vy: 0, onGround: false, facing: 1, animTimer: 0, invincible: 0, trailTimer: 0 };
+
+// Camera
+let camera = { x: 0, y: 0 };
+
+// Entities
+let platforms = [];
+let butterflyFeathers = [];
+let enemies = [];
+let particles = [];
+let goal = { x: 0, y: 0, w: 24, h: 80 };
+
+// ==================== Drawing ====================
+function drawHeart(cx, cy, size, color) {
+  ctx.fillStyle = color;
+  ctx.beginPath();
+  const s = size / 2;
+  ctx.moveTo(cx, cy + s * 0.3);
+  ctx.bezierCurveTo(cx, cy - s * 0.3, cx - s, cy - s * 0.3, cx - s, cy + s * 0.3);
+  ctx.bezierCurveTo(cx - s, cy + s * 0.9, cx, cy + s * 1.3, cx, cy + s * 1.5);
+  ctx.bezierCurveTo(cx, cy + s * 1.3, cx + s, cy + s * 0.9, cx + s, cy + s * 0.3);
+  ctx.bezierCurveTo(cx + s, cy - s * 0.3, cx, cy - s * 0.3, cx, cy + s * 0.3);
+  ctx.fill();
+}
+
+function drawButterfly(cx, cy, size, wingAngle) {
+  ctx.save();
+  ctx.translate(cx, cy);
+  const wa = wingAngle || Math.sin(Date.now() * 0.008) * 0.4;
+
+  // Upper wings
+  ctx.fillStyle = '#e8a0d0';
+  ctx.beginPath();
+  ctx.ellipse(-4, -2, size * 0.5, size * 0.3, -0.3 - wa, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.beginPath();
+  ctx.ellipse(4, -2, size * 0.5, size * 0.3, 0.3 + wa, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Lower wings
+  ctx.fillStyle = '#f0c8e8';
+  ctx.beginPath();
+  ctx.ellipse(-3, 2, size * 0.35, size * 0.22, -0.5 - wa * 0.6, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.beginPath();
+  ctx.ellipse(3, 2, size * 0.35, size * 0.22, 0.5 + wa * 0.6, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Wing spots
+  ctx.fillStyle = 'rgba(255,255,255,0.6)';
+  ctx.beginPath(); ctx.arc(-4, -3, size * 0.12, 0, Math.PI * 2); ctx.fill();
+  ctx.beginPath(); ctx.arc(4, -3, size * 0.12, 0, Math.PI * 2); ctx.fill();
+
+  // Body
+  ctx.fillStyle = '#b07090';
+  ctx.fillRect(-1, -size * 0.4, 2, size * 0.8);
+
+  // Antennae
+  ctx.strokeStyle = '#b07090';
+  ctx.lineWidth = 0.8;
+  ctx.beginPath();
+  ctx.moveTo(0, -size * 0.35);
+  ctx.quadraticCurveTo(-3, -size * 0.6, -4, -size * 0.7);
+  ctx.moveTo(0, -size * 0.35);
+  ctx.quadraticCurveTo(3, -size * 0.6, 4, -size * 0.7);
+  ctx.stroke();
+
+  ctx.restore();
+}
+
+function drawPlayer() {
+  if (player.invincible > 0 && Math.floor(player.invincible * 10) % 2 === 0) return;
+  const { x, y, w, h } = player;
+  const cx = x + w / 2, cy = y + h / 2;
+
+  ctx.save();
+  ctx.translate(cx, cy);
+  if (player.facing === -1) ctx.scale(-1, 1);
+
+  const bob = player.onGround ? Math.sin(player.animTimer * 0.3) * 2 : 0;
+
+  // Mist trail (岚岚是雾)
+  if (player.onGround || Math.abs(player.vx) > 0.5) {
+    ctx.fillStyle = 'rgba(200,190,220,0.25)';
+    ctx.beginPath();
+    ctx.arc(-4, h / 2 - 2, 10 + Math.sin(Date.now() * 0.01) * 3, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = 'rgba(210,200,230,0.18)';
+    ctx.beginPath();
+    ctx.arc(-8, h / 2 + 2, 6, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  // Feet
+  ctx.fillStyle = '#c8bfd8';
+  const footOff = player.onGround ? Math.sin(player.animTimer * 0.3) * 4 : 2;
+  ctx.fillRect(-10, h / 2 - 6 + bob, 8, 7);
+  ctx.fillRect(2, h / 2 - 6 - footOff + bob, 8, 7);
+
+  // Body — soft mist gradient
+  const bodyGrad = ctx.createRadialGradient(0, -2, 4, 0, 0, 16);
+  bodyGrad.addColorStop(0, '#d8d0f0');
+  bodyGrad.addColorStop(0.6, '#b8a8d8');
+  bodyGrad.addColorStop(1, '#9888b8');
+  ctx.fillStyle = bodyGrad;
+  ctx.beginPath();
+  ctx.arc(0, -2 + bob, 15, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Soft edge glow
+  ctx.fillStyle = 'rgba(220,210,240,0.3)';
+  ctx.beginPath();
+  ctx.arc(0, -2 + bob, 13, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Eyes — big and gentle
+  ctx.fillStyle = '#fff';
+  ctx.beginPath();
+  ctx.arc(-5, -6 + bob, 6.5, 0, Math.PI * 2);
+  ctx.arc(5, -6 + bob, 6.5, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = '#3a3060';
+  ctx.beginPath();
+  ctx.arc(-4, -5 + bob, 2.8, 0, Math.PI * 2);
+  ctx.arc(6, -5 + bob, 2.8, 0, Math.PI * 2);
+  ctx.fill();
+  // Eye highlight
+  ctx.fillStyle = '#fff';
+  ctx.beginPath();
+  ctx.arc(-5, -6.5 + bob, 1.2, 0, Math.PI * 2);
+  ctx.arc(5, -6.5 + bob, 1.2, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Blush
+  ctx.fillStyle = 'rgba(200,160,180,0.45)';
+  ctx.beginPath();
+  ctx.arc(-9, -1 + bob, 3.5, 0, Math.PI * 2);
+  ctx.arc(9, -1 + bob, 3.5, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Tiny mist particles around
+  if (player.trailTimer % 6 === 0) {
+    particles.push({
+      x: x + w / 2 + (Math.random() - 0.5) * 20,
+      y: y + h,
+      vx: (Math.random() - 0.5) * 1.5,
+      vy: -1 - Math.random() * 2,
+      life: 1,
+      decay: 0.03,
+      color: 'rgba(200,190,220,',
+      size: 3 + Math.random() * 3,
+    });
+  }
+  player.trailTimer++;
+
+  ctx.restore();
+}
+
+function drawEnemy(e) {
+  ctx.save();
+  ctx.translate(e.x + e.w / 2, e.y + e.h / 2);
+
+  // Shadow
+  ctx.fillStyle = 'rgba(0,0,0,0.15)';
+  ctx.beginPath();
+  ctx.ellipse(0, e.h / 2 - 2, e.w * 0.38, 3, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Dark mist body — 怀疑/距离/时间的化身
+  const grad = ctx.createRadialGradient(0, -2, 2, 0, 0, e.w / 2);
+  grad.addColorStop(0, '#5a4a6a');
+  grad.addColorStop(1, '#2a1a3a');
+  ctx.fillStyle = grad;
+  ctx.beginPath();
+  ctx.arc(0, 0, e.w / 2 - 2, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Jagged aura
+  ctx.fillStyle = 'rgba(40,20,60,0.5)';
+  for (let i = 0; i < 6; i++) {
+    const a = (i / 6) * Math.PI * 2;
+    const sx = Math.cos(a) * (e.w / 2 - 1);
+    const sy = Math.sin(a) * (e.h / 2 - 1);
+    ctx.beginPath();
+    ctx.arc(sx, sy - 1, 5, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  // Eyes — sad/confused (not angry, these are doubts)
+  ctx.fillStyle = '#fff';
+  ctx.beginPath();
+  ctx.arc(-5, -3, 5.5, 0, Math.PI * 2);
+  ctx.arc(5, -3, 5.5, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = '#1a0a2a';
+  ctx.beginPath();
+  ctx.arc(-4, -2, 2.5, 0, Math.PI * 2);
+  ctx.arc(6, -2, 2.5, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Worried brows
+  ctx.strokeStyle = '#1a0a2a';
+  ctx.lineWidth = 1.8;
+  ctx.beginPath();
+  ctx.moveTo(-9, -8); ctx.lineTo(-3, -6);
+  ctx.moveTo(3, -6); ctx.lineTo(9, -8);
+  ctx.stroke();
+
+  // Label — which enemy type
+  ctx.fillStyle = 'rgba(255,255,255,0.5)';
+  ctx.font = '10px SimSun, serif';
+  ctx.textAlign = 'center';
+  ctx.fillText(e.label || '', 0, -e.h / 2 - 6);
+
+  ctx.restore();
+}
+
+function drawPlatform(p) {
+  // Stone path (山路)
+  const grad = ctx.createLinearGradient(p.x, p.y, p.x, p.y + p.h);
+  grad.addColorStop(0, '#a898b8');
+  grad.addColorStop(0.3, '#9888a8');
+  grad.addColorStop(1, '#786880');
+  ctx.fillStyle = grad;
+  ctx.fillRect(p.x, p.y, p.w, p.h);
+
+  // Moss top
+  const mossH = 7;
+  ctx.fillStyle = '#9ab89a';
+  ctx.fillRect(p.x, p.y, p.w, mossH);
+  ctx.fillStyle = '#a8c8a8';
+  for (let gx = p.x; gx < p.x + p.w; gx += 8) {
+    ctx.fillRect(gx, p.y, 4, mossH + 1);
+  }
+
+  // Texture
+  ctx.fillStyle = 'rgba(0,0,0,0.06)';
+  for (let dx = p.x + 3; dx < p.x + p.w; dx += 14) {
+    for (let dy = p.y + mossH + 3; dy < p.y + p.h; dy += 10) {
+      ctx.fillRect(dx, dy, 2, 2);
+    }
+  }
+
+  ctx.strokeStyle = 'rgba(0,0,0,0.15)';
+  ctx.lineWidth = 1;
+  ctx.strokeRect(p.x, p.y, p.w, p.h);
+}
+
+function drawGoal() {
+  const gx = goal.x + goal.w / 2;
+
+  // Glow aura
+  const glowGrad = ctx.createRadialGradient(gx, goal.y + 10, 6, gx, goal.y + 10, 40);
+  glowGrad.addColorStop(0, 'rgba(255,220,180,0.5)');
+  glowGrad.addColorStop(1, 'rgba(255,220,180,0)');
+  ctx.fillStyle = glowGrad;
+  ctx.beginPath();
+  ctx.arc(gx, goal.y + 10, 40, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Pole — wooden
+  ctx.fillStyle = '#c8b898';
+  ctx.fillRect(gx - 2, goal.y, 4, goal.h);
+  ctx.fillStyle = '#d8c8a8';
+  ctx.fillRect(gx - 0.5, goal.y, 1, goal.h);
+
+  // Banner
+  const wave = Math.sin(Date.now() * 0.005) * 3;
+  ctx.fillStyle = '#d4a0c0';
+  ctx.beginPath();
+  ctx.moveTo(gx + 2, goal.y + 4);
+  ctx.lineTo(gx + 38 + wave, goal.y + 18);
+  ctx.lineTo(gx + 2, goal.y + 32);
+  ctx.closePath();
+  ctx.fill();
+
+  // Butterfly on banner (蝶蝶的标志)
+  drawButterfly(gx + 14 + wave * 0.5, goal.y + 18, 16, Math.sin(Date.now() * 0.012) * 0.5);
+}
+
+function drawBackground() {
+  const palettes = [
+    ['#f5f0ff', '#e8ddf0', '#d8c8e8'], // 粉色晨曦 - 初遇
+    ['#fff5ee', '#f0e0d0', '#e0c8a8'], // 暖橘午后 - 寻找
+    ['#e8e0f0', '#c8b8e0', '#685890'], // 紫夜星空 - 团聚
+  ];
+  const [c1, c2, c3] = palettes[currentLevel] || palettes[0];
+  const grad = ctx.createLinearGradient(0, 0, 0, GAME_H);
+  grad.addColorStop(0, c1);
+  grad.addColorStop(0.55, c2);
+  grad.addColorStop(1, c3);
+  ctx.fillStyle = grad;
+  ctx.fillRect(0, 0, GAME_W, GAME_H);
+
+  // Parallax mist layers (岚岚的世界)
+  for (let layer = 0; layer < 3; layer++) {
+    const alpha = 0.15 + layer * 0.08;
+    const speed = 0.05 + layer * 0.08;
+    ctx.fillStyle = `rgba(220,210,235,${alpha})`;
+    for (let i = 0; i < 6; i++) {
+      const mx = (i * 220 + 30 * layer) - (camera.x * speed) % (GAME_W + 260);
+      const my = 40 + layer * 60;
+      ctx.beginPath();
+      ctx.ellipse(mx, my, 60 + layer * 25, 18 + layer * 8, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.beginPath();
+      ctx.ellipse(mx - 25, my + 10, 40, 14, 0, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+
+  // Stars level 3
+  if (currentLevel === 2) {
+    for (let i = 0; i < 50; i++) {
+      const sx = (i * 97 + 30) % GAME_W;
+      const sy = (i * 67 + 15) % (GAME_H * 0.55);
+      const twinkle = Math.sin(Date.now() * 0.002 + i) * 0.5 + 0.5;
+      ctx.fillStyle = `rgba(255,255,240,${0.25 + twinkle * 0.65})`;
+      ctx.beginPath();
+      ctx.arc(sx, sy, 0.8 + twinkle * 1.2, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+
+  // Distant mountains
+  ctx.fillStyle = currentLevel === 2 ? 'rgba(50,40,70,0.55)' : 'rgba(180,170,190,0.4)';
+  ctx.beginPath();
+  ctx.moveTo(0, GAME_H);
+  for (let x = 0; x <= GAME_W; x += 2) {
+    const hx = x + camera.x * 0.08;
+    const hy = GAME_H - 90 - Math.sin(hx * 0.004) * 45 - Math.sin(hx * 0.011) * 25 - Math.sin(hx * 0.023) * 15;
+    ctx.lineTo(x, hy);
+  }
+  ctx.lineTo(GAME_W, GAME_H);
+  ctx.fill();
+
+  // Occasional distant butterflies
+  if (currentLevel >= 1) {
+    for (let i = 0; i < 3; i++) {
+      const bx = (i * 400 + 150 + Date.now() * 0.015 * (i + 1)) % (GAME_W + 100) - 50;
+      const by = 60 + i * 45 + Math.sin(Date.now() * 0.003 + i) * 15;
+      ctx.globalAlpha = 0.25;
+      drawButterfly(bx, by, 10, Math.sin(Date.now() * 0.01 + i) * 0.6);
+    }
+    ctx.globalAlpha = 1;
+  }
+}
+
+function spawnParticles(x, y, count, color) {
+  for (let i = 0; i < count; i++) {
+    particles.push({
+      x, y,
+      vx: (Math.random() - 0.5) * 6,
+      vy: (Math.random() - 0.5) * 6 - 2,
+      life: 1,
+      decay: 0.018 + Math.random() * 0.04,
+      color,
+      size: 2 + Math.random() * 4,
+    });
+  }
+}
+
+// ==================== Level Data ====================
+function buildLevel(index) {
+  const levels = [
+    { // 第一幕 · 山间初遇 — 简单，短而甜
+      width: 3000,
+      platforms: [
+        { x: 0, y: 460, w: 380, h: 80 },
+        { x: 460, y: 460, w: 200, h: 80 },
+        { x: 740, y: 460, w: 280, h: 80 },
+        { x: 1100, y: 460, w: 250, h: 80 },
+        { x: 1430, y: 460, w: 340, h: 80 },
+        { x: 1850, y: 460, w: 380, h: 80 },
+        { x: 2310, y: 460, w: 320, h: 80 },
+        { x: 2710, y: 460, w: 320, h: 80 },
+        // Floating
+        { x: 350, y: 390, w: 130, h: 24 },
+        { x: 640, y: 350, w: 120, h: 24 },
+        { x: 1020, y: 370, w: 130, h: 24 },
+        { x: 1350, y: 330, w: 140, h: 24 },
+        { x: 1680, y: 380, w: 160, h: 24 },
+        { x: 2000, y: 340, w: 140, h: 24 },
+        { x: 2400, y: 310, w: 140, h: 24 },
+        { x: 2650, y: 370, w: 130, h: 24 },
+      ],
+      feathers: [
+        { x: 390, y: 350 }, { x: 680, y: 310 },
+        { x: 1060, y: 330 }, { x: 1390, y: 290 },
+        { x: 1500, y: 420 }, { x: 1730, y: 340 },
+        { x: 2050, y: 300 }, { x: 2440, y: 270 },
+        { x: 2700, y: 330 }, { x: 2850, y: 420 },
+      ],
+      enemies: [
+        { x: 580, y: 428, w: 32, h: 32, minX: 540, maxX: 620, label: '怀疑' },
+        { x: 1550, y: 428, w: 32, h: 32, minX: 1500, maxX: 1700, label: '距离' },
+      ],
+      goal: { x: 2870, y: 380 },
+      spawn: { x: 40, y: 400 },
+    },
+    { // 第二幕 · 雾散寻蝶 — 中等，路长一点
+      width: 4000,
+      platforms: [
+        { x: 0, y: 460, w: 340, h: 80 },
+        { x: 420, y: 460, w: 180, h: 80 },
+        { x: 680, y: 460, w: 220, h: 80 },
+        { x: 980, y: 460, w: 190, h: 80 },
+        { x: 1250, y: 460, w: 300, h: 80 },
+        { x: 1630, y: 460, w: 210, h: 80 },
+        { x: 1920, y: 460, w: 340, h: 80 },
+        { x: 2340, y: 460, w: 230, h: 80 },
+        { x: 2650, y: 460, w: 300, h: 80 },
+        { x: 3030, y: 460, w: 400, h: 80 },
+        { x: 3500, y: 460, w: 520, h: 80 },
+        // Floating
+        { x: 300, y: 400, w: 140, h: 24 },
+        { x: 560, y: 360, w: 150, h: 24 },
+        { x: 860, y: 320, w: 150, h: 24 },
+        { x: 1150, y: 380, w: 140, h: 24 },
+        { x: 1500, y: 330, w: 170, h: 24 },
+        { x: 1800, y: 390, w: 140, h: 24 },
+        { x: 2200, y: 340, w: 160, h: 24 },
+        { x: 2550, y: 310, w: 150, h: 24 },
+        { x: 2900, y: 370, w: 160, h: 24 },
+        { x: 3300, y: 330, w: 180, h: 24 },
+        { x: 3650, y: 290, w: 150, h: 24 },
+      ],
+      feathers: [
+        { x: 340, y: 360 }, { x: 600, y: 320 },
+        { x: 900, y: 280 }, { x: 1190, y: 340 },
+        { x: 1350, y: 420 }, { x: 1540, y: 290 },
+        { x: 1850, y: 350 }, { x: 2100, y: 420 },
+        { x: 2240, y: 300 }, { x: 2480, y: 420 },
+        { x: 2590, y: 270 }, { x: 2940, y: 330 },
+        { x: 3150, y: 420 }, { x: 3340, y: 290 },
+        { x: 3690, y: 250 },
+      ],
+      enemies: [
+        { x: 530, y: 428, w: 32, h: 32, minX: 480, maxX: 580, label: '距离' },
+        { x: 1100, y: 428, w: 32, h: 32, minX: 1050, maxX: 1200, label: '怀疑' },
+        { x: 1750, y: 428, w: 32, h: 32, minX: 1700, maxX: 1820, label: '时间' },
+        { x: 2450, y: 428, w: 32, h: 32, minX: 2400, maxX: 2550, label: '距离' },
+      ],
+      goal: { x: 3800, y: 380 },
+      spawn: { x: 40, y: 400 },
+    },
+    { // 第三幕 · 岚归蝶舞 — 最长，最后的考验
+      width: 5000,
+      platforms: [
+        { x: 0, y: 460, w: 300, h: 80 },
+        { x: 380, y: 460, w: 150, h: 80 },
+        { x: 610, y: 460, w: 200, h: 80 },
+        { x: 890, y: 460, w: 160, h: 80 },
+        { x: 1130, y: 460, w: 250, h: 80 },
+        { x: 1460, y: 460, w: 180, h: 80 },
+        { x: 1720, y: 460, w: 300, h: 80 },
+        { x: 2100, y: 460, w: 200, h: 80 },
+        { x: 2380, y: 460, w: 350, h: 80 },
+        { x: 2810, y: 460, w: 220, h: 80 },
+        { x: 3120, y: 460, w: 300, h: 80 },
+        { x: 3500, y: 460, w: 400, h: 80 },
+        { x: 3980, y: 460, w: 350, h: 80 },
+        { x: 4410, y: 460, w: 600, h: 80 },
+        // Floating
+        { x: 260, y: 390, w: 140, h: 24 },
+        { x: 490, y: 350, w: 140, h: 24 },
+        { x: 750, y: 310, w: 130, h: 24 },
+        { x: 1020, y: 370, w: 140, h: 24 },
+        { x: 1340, y: 320, w: 160, h: 24 },
+        { x: 1610, y: 380, w: 150, h: 24 },
+        { x: 1990, y: 330, w: 140, h: 24 },
+        { x: 2280, y: 300, w: 140, h: 24 },
+        { x: 2690, y: 360, w: 160, h: 24 },
+        { x: 3010, y: 310, w: 150, h: 24 },
+        { x: 3390, y: 350, w: 160, h: 24 },
+        { x: 3760, y: 300, w: 180, h: 24 },
+        { x: 4160, y: 340, w: 160, h: 24 },
+        { x: 4560, y: 290, w: 150, h: 24 },
+      ],
+      feathers: [
+        { x: 300, y: 350 }, { x: 530, y: 310 },
+        { x: 790, y: 270 }, { x: 1060, y: 330 },
+        { x: 1200, y: 420 }, { x: 1380, y: 280 },
+        { x: 1560, y: 420 }, { x: 1650, y: 340 },
+        { x: 1860, y: 420 }, { x: 2030, y: 290 },
+        { x: 2210, y: 420 }, { x: 2320, y: 260 },
+        { x: 2560, y: 420 }, { x: 2730, y: 320 },
+        { x: 2910, y: 420 }, { x: 3050, y: 270 },
+        { x: 3260, y: 420 }, { x: 3430, y: 310 },
+        { x: 3610, y: 420 }, { x: 3800, y: 260 },
+        { x: 4060, y: 420 }, { x: 4210, y: 300 },
+        { x: 4460, y: 420 }, { x: 4600, y: 250 },
+      ],
+      enemies: [
+        { x: 440, y: 428, w: 32, h: 32, minX: 410, maxX: 510, label: '怀疑' },
+        { x: 940, y: 428, w: 32, h: 32, minX: 910, maxX: 1020, label: '时间' },
+        { x: 1360, y: 428, w: 32, h: 32, minX: 1300, maxX: 1410, label: '距离' },
+        { x: 1820, y: 428, w: 32, h: 32, minX: 1760, maxX: 1960, label: '怀疑' },
+        { x: 2500, y: 428, w: 32, h: 32, minX: 2450, maxX: 2600, label: '时间' },
+        { x: 3200, y: 428, w: 32, h: 32, minX: 3150, maxX: 3350, label: '距离' },
+      ],
+      goal: { x: 4780, y: 380 },
+      spawn: { x: 40, y: 400 },
+    },
+  ];
+  return levels[index];
+}
+
+function loadLevel(index) {
+  const data = buildLevel(index);
+  platforms = data.platforms;
+  butterflyFeathers = data.feathers.map(h => ({ ...h, collected: false, bobOffset: Math.random() * Math.PI * 2 }));
+  enemies = data.enemies.map(e => ({ ...e, alive: true, dir: 1, speed: 1.5 + index * 0.35 }));
+  goal.x = data.goal.x;
+  goal.y = data.goal.y;
+  player.x = data.spawn.x;
+  player.y = data.spawn.y;
+  player.vx = 0; player.vy = 0;
+  player.onGround = false;
+  player.invincible = 0;
+  particles = [];
+  camera.x = 0; camera.y = 0;
+  platforms._levelWidth = data.width;
+}
+
+// ==================== Physics & Collision ====================
+function rectsCollide(a, b) {
+  return a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y;
+}
+
+function resolvePlatforms() {
+  player.onGround = false;
+  for (const p of platforms) {
+    if (!rectsCollide(player, p)) continue;
+    const ol = (player.x + player.w) - p.x;
+    const or = (p.x + p.w) - player.x;
+    const ot = (player.y + player.h) - p.y;
+    const ob = (p.y + p.h) - player.y;
+    if (Math.min(ol, or) < Math.min(ot, ob)) {
+      if (ol < or) { player.x = p.x - player.w; } else { player.x = p.x + p.w; }
+      player.vx = 0;
+    } else {
+      if (ot < ob) { player.y = p.y - player.h; player.vy = 0; player.onGround = true; }
+      else { player.y = p.y + p.h; player.vy = 0; }
+    }
+  }
+}
+
+function checkEnemyCollisions() {
+  if (player.invincible > 0) return;
+  for (const e of enemies) {
+    if (!e.alive) continue;
+    if (!rectsCollide(player, e)) continue;
+    const isStomp = player.vy > 0 && (player.y + player.h) - e.y < 18;
+    if (isStomp) {
+      e.alive = false;
+      player.vy = -7;
+      score += 100;
+      spawnParticles(e.x + e.w / 2, e.y + e.h / 2, 12, '#ffd700');
+      shakeTimer = 8; shakeIntensity = 3;
+    } else {
+      lives--;
+      player.invincible = 90;
+      player.vy = -8;
+      player.vx = (player.x < e.x) ? -6 : 6;
+      spawnParticles(player.x + player.w / 2, player.y + player.h / 2, 15, '#ff6666');
+      shakeTimer = 15; shakeIntensity = 6;
+      if (lives <= 0) { gameState = STATE.GAMEOVER; }
+    }
+  }
+}
+
+function collectFeathers() {
+  for (const f of butterflyFeathers) {
+    if (f.collected) continue;
+    if (rectsCollide(player, { x: f.x - 10, y: f.y - 10, w: 20, h: 20 })) {
+      f.collected = true;
+      score += 50;
+      spawnParticles(f.x, f.y, 8, '#e8a0d0');
+    }
+  }
+}
+
+// ==================== Update ====================
+const GRAVITY = 0.58;
+const JUMP_FORCE = -11.5;
+const MOVE_SPEED = 4.5;
+const MAX_FALL = 14;
+
+function update() {
+  if (gameState === STATE.START) {
+    if (keys['Space'] || keys['ArrowUp'] || keys['KeyW']) { startGame(); }
+    return;
+  }
+  if (gameState === STATE.LEVEL_COMPLETE) {
+    levelTransitionTimer--;
+    if (levelTransitionTimer <= 0 && (keys['Space'] || keys['ArrowUp'] || keys['KeyW'])) { nextLevel(); }
+    return;
+  }
+  if (gameState === STATE.WIN || gameState === STATE.GAMEOVER) {
+    levelTransitionTimer--;
+    if (levelTransitionTimer <= 30 && (keys['Space'] || keys['ArrowUp'] || keys['KeyW'])) {
+      currentLevel = 0; score = 0; lives = 5;
+      loadLevel(0); gameState = STATE.PLAYING;
+    }
+    return;
+  }
+  if (gameState !== STATE.PLAYING) return;
+
+  // Input
+  if (keys['ArrowLeft'] || keys['KeyA']) { player.vx = -MOVE_SPEED; player.facing = -1; }
+  else if (keys['ArrowRight'] || keys['KeyD']) { player.vx = MOVE_SPEED; player.facing = 1; }
+  else { player.vx *= 0.7; }
+
+  if ((keys['Space'] || keys['ArrowUp'] || keys['KeyW']) && player.onGround) {
+    player.vy = JUMP_FORCE; player.onGround = false;
+  }
+
+  // Physics
+  player.vy += GRAVITY;
+  if (player.vy > MAX_FALL) player.vy = MAX_FALL;
+
+  player.x += player.vx;
+  const lvlW = platforms._levelWidth || 3000;
+  if (player.x < 0) player.x = 0;
+  if (player.x > lvlW - player.w) player.x = lvlW - player.w;
+  resolvePlatforms();
+
+  player.y += player.vy;
+  resolvePlatforms();
+
+  // Fall off
+  if (player.y > GAME_H + 50) {
+    lives--;
+    if (lives <= 0) { gameState = STATE.GAMEOVER; levelTransitionTimer = 90; return; }
+    player.invincible = 60;
+    const d = buildLevel(currentLevel);
+    player.x = d.spawn.x; player.y = d.spawn.y;
+    player.vx = 0; player.vy = 0;
+  }
+
+  if (player.invincible > 0) player.invincible--;
+  if (Math.abs(player.vx) > 0.5 && player.onGround) player.animTimer++;
+  else if (player.onGround) player.animTimer = 0;
+
+  // Enemies
+  for (const e of enemies) {
+    if (!e.alive) continue;
+    e.x += e.dir * e.speed;
+    if (e.x <= e.minX || e.x + e.w >= e.maxX) e.dir *= -1;
+  }
+
+  checkEnemyCollisions();
+  collectFeathers();
+
+  // Particles
+  for (const p of particles) { p.x += p.vx; p.y += p.vy; p.vy += 0.2; p.life -= p.decay; }
+  particles = particles.filter(p => p.life > 0);
+  if (shakeTimer > 0) shakeTimer--;
+
+  // Camera
+  const targetCamX = player.x - GAME_W / 2 + player.w / 2;
+  camera.x += (targetCamX - camera.x) * 0.12;
+  if (camera.x < 0) camera.x = 0;
+  if (camera.x > lvlW - GAME_W) camera.x = lvlW - GAME_W;
+
+  // Goal
+  if (rectsCollide(player, { x: goal.x, y: goal.y, w: goal.w, h: goal.h })) {
+    gameState = STATE.LEVEL_COMPLETE;
+    levelTransitionTimer = 70;
+    spawnParticles(goal.x, goal.y + goal.h / 2, 35, '#ffd700');
+    spawnParticles(goal.x, goal.y + goal.h / 2, 25, '#e8a0d0');
+  }
+}
+
+// ==================== Render ====================
+function render() {
+  ctx.clearRect(0, 0, GAME_W, GAME_H);
+
+  ctx.save();
+  if (shakeTimer > 0) {
+    const sx = (Math.random() - 0.5) * shakeIntensity * (shakeTimer / 15);
+    const sy = (Math.random() - 0.5) * shakeIntensity * (shakeTimer / 15);
+    ctx.translate(sx, sy);
+    shakeIntensity *= 0.85;
+  }
+
+  drawBackground();
+
+  ctx.save();
+  ctx.translate(-camera.x, -camera.y);
+
+  for (const p of platforms) drawPlatform(p);
+  drawGoal();
+
+  // Butterfly feathers (蝶羽)
+  for (const f of butterflyFeathers) {
+    if (f.collected) continue;
+    const bob = Math.sin(Date.now() * 0.004 + f.bobOffset) * 4;
+    drawButterfly(f.x, f.y + bob, 14, Math.sin(Date.now() * 0.01 + f.bobOffset) * 0.5);
+    ctx.fillStyle = 'rgba(230,160,200,0.2)';
+    ctx.beginPath();
+    ctx.arc(f.x, f.y + bob, 15, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  for (const e of enemies) { if (e.alive) drawEnemy(e); }
+  drawPlayer();
+
+  for (const p of particles) {
+    ctx.globalAlpha = p.life;
+    ctx.fillStyle = p.color;
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, p.size * p.life, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.globalAlpha = 1;
+
+  ctx.restore(); // camera
+  ctx.restore(); // shake
+
+  drawUI();
+  if (gameState === STATE.START) drawStartScreen();
+  if (gameState === STATE.LEVEL_COMPLETE) drawLevelComplete();
+  if (gameState === STATE.WIN) drawWinScreen();
+  if (gameState === STATE.GAMEOVER) drawGameOver();
+}
+
+function drawUI() {
+  // Lives as butterflies
+  for (let i = 0; i < lives; i++) {
+    drawButterfly(30 + i * 32, 24, 8, Math.sin(Date.now() * 0.01 + i) * 0.3);
+  }
+  // Score
+  ctx.fillStyle = '#fff';
+  ctx.font = 'bold 18px Georgia, SimSun, serif';
+  ctx.textAlign = 'right';
+  ctx.fillText(`${score} 🦋`, GAME_W - 20, 30);
+  // Level name
+  ctx.fillStyle = 'rgba(255,255,255,0.7)';
+  ctx.font = '14px SimSun, Georgia, serif';
+  ctx.textAlign = 'center';
+  ctx.fillText(STORY.levelNames[currentLevel] || '', GAME_W / 2, 24);
+}
+
+function drawStartScreen() {
+  ctx.fillStyle = 'rgba(20,15,35,0.7)';
+  ctx.fillRect(0, 0, GAME_W, GAME_H);
+
+  const t = Date.now() * 0.001;
+
+  // Title
+  ctx.fillStyle = '#e0d0f0';
+  ctx.font = 'bold 48px SimSun, Georgia, serif';
+  ctx.textAlign = 'center';
+  ctx.fillText('蝶 舞 岚 间', GAME_W / 2, GAME_H / 2 - 100);
+
+  // Subtitle
+  ctx.fillStyle = 'rgba(220,200,240,0.8)';
+  ctx.font = 'italic 20px Georgia, SimSun, serif';
+  ctx.fillText('山间有雾，雾中有蝶', GAME_W / 2, GAME_H / 2 - 58);
+
+  // Decorative butterflies
+  const bt = t * 0.6;
+  drawButterfly(GAME_W / 2 - 100 + Math.sin(bt) * 30, GAME_H / 2 - 30, 18, Math.sin(bt * 1.5) * 0.6);
+  drawButterfly(GAME_W / 2 + 100 + Math.cos(bt * 0.8) * 30, GAME_H / 2 - 26, 14, Math.cos(bt * 1.3) * 0.6);
+
+  // Prologue
+  ctx.fillStyle = 'rgba(255,255,255,0.7)';
+  ctx.font = '15px SimSun, Georgia, serif';
+  const prologueLines = STORY.prologue.split('\n');
+  prologueLines.forEach((line, i) => {
+    ctx.fillText(line, GAME_W / 2, GAME_H / 2 + i * 24);
+  });
+
+  // Start hint
+  const pulse = Math.sin(t * 2) * 0.3 + 0.7;
+  ctx.globalAlpha = pulse;
+  ctx.fillStyle = 'rgba(255,255,255,0.8)';
+  ctx.font = '16px SimSun, Georgia, serif';
+  ctx.fillText('按 空格键 · 开始寻找蝶蝶', GAME_W / 2, GAME_H / 2 + prologueLines.length * 24 + 30);
+  ctx.globalAlpha = 1;
+
+  ctx.font = '12px SimSun, Georgia, serif';
+  ctx.fillStyle = 'rgba(255,255,255,0.35)';
+  ctx.fillText('← → 移动    空格 跳跃    踩敌人消灭阻碍', GAME_W / 2, GAME_H - 30);
+}
+
+function drawLevelComplete() {
+  ctx.fillStyle = 'rgba(20,15,35,0.72)';
+  ctx.fillRect(0, 0, GAME_W, GAME_H);
+
+  // Big butterfly
+  drawButterfly(GAME_W / 2, GAME_H / 2 - 80, 36, Math.sin(Date.now() * 0.008) * 0.5);
+
+  ctx.fillStyle = '#f0d080';
+  ctx.font = 'bold 34px SimSun, Georgia, serif';
+  ctx.textAlign = 'center';
+  ctx.fillText('🦋 蝶羽归岚 🦋', GAME_W / 2, GAME_H / 2 - 20);
+
+  ctx.fillStyle = '#fff';
+  ctx.font = '17px SimSun, Georgia, serif';
+  const msg = STORY.levelEpilogues[currentLevel] || '';
+  const lines = msg.split('\n');
+  lines.forEach((line, i) => {
+    ctx.fillText(line, GAME_W / 2, GAME_H / 2 + i * 28);
+  });
+
+  if (levelTransitionTimer < 50) {
+    ctx.globalAlpha = Math.sin(Date.now() * 0.003 * 2) * 0.3 + 0.7;
+    ctx.fillStyle = 'rgba(255,255,255,0.7)';
+    ctx.font = '14px SimSun, Georgia, serif';
+    ctx.fillText('按 空格键 继续前行', GAME_W / 2, GAME_H / 2 + lines.length * 28 + 25);
+    ctx.globalAlpha = 1;
+  }
+}
+
+function drawWinScreen() {
+  ctx.fillStyle = 'rgba(20,12,35,0.8)';
+  ctx.fillRect(0, 0, GAME_W, GAME_H);
+
+  // Floating butterflies
+  for (let i = 0; i < 14; i++) {
+    const bx = (i * 83 + 50) % GAME_W;
+    const by = GAME_H + 50 - ((Date.now() * 0.025 + i * 280) % (GAME_H + 150));
+    const alpha = by > 0 && by < GAME_H ? 0.4 : 0;
+    ctx.globalAlpha = alpha;
+    drawButterfly(bx, by, 8 + (i % 4) * 3, Math.sin(Date.now() * 0.015 + i) * 0.7);
+  }
+  ctx.globalAlpha = 1;
+
+  // Love letter card
+  const cX = GAME_W / 2 - 230, cY = 30, cW = 460, cH = 480;
+  ctx.fillStyle = '#faf5f0';
+  ctx.shadowColor = 'rgba(0,0,0,0.35)';
+  ctx.shadowBlur = 35;
+  ctx.fillRect(cX, cY, cW, cH);
+  ctx.shadowBlur = 0;
+
+  // Border
+  ctx.strokeStyle = '#d4b8c8';
+  ctx.lineWidth = 3;
+  ctx.strokeRect(cX + 8, cY + 8, cW - 16, cH - 16);
+  ctx.strokeStyle = '#e8d0e0';
+  ctx.lineWidth = 1;
+  ctx.strokeRect(cX + 18, cY + 18, cW - 36, cH - 36);
+
+  // Title
+  ctx.fillStyle = '#b87090';
+  ctx.font = 'bold 24px SimSun, Georgia, serif';
+  ctx.textAlign = 'center';
+  ctx.fillText('💌 致我的小蝴蝶', GAME_W / 2, cY + 48);
+
+  // Line
+  ctx.strokeStyle = '#d4b8c8';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(cX + 70, cY + 58);
+  ctx.lineTo(cX + cW - 70, cY + 58);
+  ctx.stroke();
+
+  // Content
+  const letterLines = STORY.loveLetter.split('\n');
+  ctx.fillStyle = '#5a4a5a';
+  ctx.font = '14px SimSun, Georgia, serif';
+  letterLines.forEach((line, i) => {
+    if (i < 20) ctx.fillText(line, GAME_W / 2, cY + 82 + i * 21);
+  });
+
+  // Restart
+  if (levelTransitionTimer < 30) {
+    ctx.globalAlpha = Math.sin(Date.now() * 0.003 * 2) * 0.3 + 0.7;
+    ctx.fillStyle = 'rgba(255,255,255,0.8)';
+    ctx.font = '13px SimSun, Georgia, serif';
+    ctx.fillText('按 空格键 再走一次', GAME_W / 2, GAME_H - 12);
+    ctx.globalAlpha = 1;
+  }
+
+  // Orbiting butterflies
+  const orbT = Date.now() * 0.0006;
+  for (let i = 0; i < 8; i++) {
+    const angle = orbT + (i / 8) * Math.PI * 2;
+    const rx = GAME_W / 2 + Math.cos(angle) * (cW / 2 + 38);
+    const ry = cY + cH / 2 + Math.sin(angle) * (cH / 2 + 38);
+    drawButterfly(rx, ry, 9 + Math.sin(orbT + i) * 2, Math.cos(orbT * 1.4 + i) * 0.5);
+  }
+}
+
+function drawGameOver() {
+  ctx.fillStyle = 'rgba(15,10,30,0.78)';
+  ctx.fillRect(0, 0, GAME_W, GAME_H);
+
+  ctx.fillStyle = '#d0a0c0';
+  ctx.font = 'bold 34px SimSun, Georgia, serif';
+  ctx.textAlign = 'center';
+  ctx.fillText('雾未散，蝶未远', GAME_W / 2, GAME_H / 2 - 20);
+
+  ctx.fillStyle = 'rgba(255,255,255,0.7)';
+  ctx.font = '16px SimSun, Georgia, serif';
+  ctx.fillText('岚岚不会放弃，正如我不会放弃你', GAME_W / 2, GAME_H / 2 + 25);
+
+  if (levelTransitionTimer < 30) {
+    ctx.globalAlpha = Math.sin(Date.now() * 0.003 * 2) * 0.3 + 0.7;
+    ctx.fillStyle = 'rgba(255,255,255,0.7)';
+    ctx.font = '14px SimSun, Georgia, serif';
+    ctx.fillText('按 空格键 重新出发', GAME_W / 2, GAME_H / 2 + 60);
+    ctx.globalAlpha = 1;
+  }
+}
+
+// ==================== Game Flow ====================
+function startGame() {
+  currentLevel = 0; score = 0; lives = 5;
+  loadLevel(0);
+  gameState = STATE.PLAYING;
+}
+
+function nextLevel() {
+  currentLevel++;
+  if (currentLevel >= 3) { gameState = STATE.WIN; levelTransitionTimer = 90; }
+  else { loadLevel(currentLevel); gameState = STATE.PLAYING; }
+}
+
+// ==================== Loop ====================
+function gameLoop() {
+  update();
+  render();
+  requestAnimationFrame(gameLoop);
+}
+
+loadLevel(0);
+gameLoop();
+</script>
+</body>
+</html>
